@@ -41,6 +41,8 @@ import { initNavigation } from "./Navigation";
 import "./NewsModal";
 import "./PatternInput";
 import "./SinglePlayerModal";
+import { StoreModal } from "./Store";
+import "./TerritoryPatternsModal";
 import { TerritoryPatternsModal } from "./TerritoryPatternsModal";
 import { TokenLoginModal } from "./TokenLoginModal";
 import {
@@ -247,7 +249,7 @@ class Client {
   private joinModal: JoinLobbyModal;
   private gameModeSelector: GameModeSelector;
   private userSettings: UserSettings = new UserSettings();
-  private patternsModal: TerritoryPatternsModal;
+  private storeModal: StoreModal;
   private tokenLoginModal: TokenLoginModal;
   private matchmakingModal: MatchmakingModal;
 
@@ -361,30 +363,22 @@ class Client {
       });
     });
 
-    this.patternsModal = document.getElementById(
+    this.storeModal = document.getElementById("page-item-store") as StoreModal;
+    if (!this.storeModal || !(this.storeModal instanceof StoreModal)) {
+      console.warn("Store modal element not found");
+    }
+
+    const patternsModal = document.getElementById(
       "territory-patterns-modal",
     ) as TerritoryPatternsModal;
-    if (
-      !this.patternsModal ||
-      !(this.patternsModal instanceof TerritoryPatternsModal)
-    ) {
-      console.warn("Territory patterns modal element not found");
+    if (!patternsModal || !(patternsModal instanceof TerritoryPatternsModal)) {
+      console.warn("Patterns modal element not found");
     }
 
     // Attach listener to any pattern-input component
     document.querySelectorAll("pattern-input").forEach((patternInput) => {
       patternInput.addEventListener("pattern-input-click", () => {
-        // Open the Store page which contains the patterns UI
-        window.showPage?.("page-item-store");
-        const skinStoreModal = document.getElementById(
-          "page-item-store",
-        ) as HTMLElement & { open?: (opts: any) => void };
-        if (skinStoreModal) {
-          skinStoreModal.classList.remove("hidden");
-          if (typeof skinStoreModal.open === "function") {
-            skinStoreModal.open({ showOnlyOwned: true });
-          }
-        }
+        patternsModal.open();
       });
     });
 
@@ -393,29 +387,26 @@ class Client {
       if (mobilePat) mobilePat.style.display = "none";
     }
 
-    if (
-      !this.patternsModal ||
-      !(this.patternsModal instanceof TerritoryPatternsModal)
-    ) {
-      console.warn("Territory patterns modal element not found");
+    if (!this.storeModal || !(this.storeModal instanceof StoreModal)) {
+      console.warn("Store modal element not found");
     }
 
     // We no longer need to manually manage the preview button as PatternInput handles it component-side.
     // However, we still want to ensure the modal can be opened.
     // The setupPatternInput above handles the click event for the new buttons.
 
-    this.patternsModal.refresh();
+    this.storeModal.refresh();
 
     // Listen for pattern selection to update any other listeners if needed,
     // though PatternInput handles its own updates via window event.
-    this.patternsModal.addEventListener("pattern-selected", () => {
+    this.storeModal.addEventListener("pattern-selected", () => {
       // PatternInput components will update themselves.
     });
 
     window.addEventListener("showPage", (e: any) => {
       if (typeof e?.detail === "string" && e.detail === "page-play") {
         setTimeout(() => {
-          this.patternsModal.refresh();
+          this.storeModal.refresh();
         }, 50);
       }
     });
@@ -667,7 +658,7 @@ class Client {
         this.tokenLoginModal.openWithToken(token);
       } else {
         alertAndStrip(`purchase succeeded: ${patternName}`);
-        this.patternsModal.refresh();
+        this.storeModal.refresh();
       }
       return;
     }
@@ -702,7 +693,7 @@ class Client {
       const affiliateCode = decodedHash.replace("#affiliate=", "");
       strip();
       if (affiliateCode) {
-        this.patternsModal?.open(affiliateCode);
+        this.storeModal?.open(affiliateCode);
       }
     }
     if (decodedHash.startsWith("#refresh")) {
@@ -781,6 +772,7 @@ class Client {
         "user-setting",
         "troubleshooting-modal",
         "territory-patterns-modal",
+        "store-modal",
         "language-modal",
         "news-modal",
         "flag-input-modal",

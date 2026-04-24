@@ -63,6 +63,11 @@ export class PseudoRandom {
   chance(odds: number): boolean {
     return this.nextInt(0, odds) === 0;
   }
+  
+  // Returns true with probability prob.
+  probability(prob: number): boolean {
+    return this.next() <= prob;
+  }
 
   // Returns a shuffled copy of the array using Fisher-Yates algorithm.
   shuffleArray<T>(array: T[]): T[] {

@@ -53,6 +53,9 @@ export enum GameUpdateType {
   BrokeAlliance,
   AllianceExpired,
   AllianceExtension,
+  VassalageRequest,
+  VassalageRequestReply,
+  BrokeVassalage,
   TargetPlayer,
   Emoji,
   Win,
@@ -74,6 +77,9 @@ export type GameUpdate =
   | AllianceRequestReplyUpdate
   | BrokeAllianceUpdate
   | AllianceExpiredUpdate
+  | VassalageRequestUpdate
+  | VassalageRequestReplyUpdate
+  | BrokeVassalageUpdate
   | DisplayMessageUpdate
   | DisplayChatMessageUpdate
   | TargetPlayerUpdate
@@ -184,6 +190,9 @@ export interface PlayerUpdate {
   incomingAttacks: AttackUpdate[];
   outgoingAllianceRequests: PlayerID[];
   alliances: AllianceView[];
+  outgoingVassalageRequests: PlayerID[];
+  outgoingSelfVassalageRequests: PlayerID[];
+  vassalages: VassalageView[];
   hasSpawned: boolean;
   betrayals: number;
   lastDeleteUnitTick: Tick;
@@ -228,6 +237,35 @@ export interface AllianceExtensionUpdate {
   type: GameUpdateType.AllianceExtension;
   playerID: number;
   allianceID: number;
+}
+
+export interface VassalageView {
+  id: number;
+  other: PlayerID;
+  isOtherVassal: boolean;
+  createdAt: Tick;
+}
+
+export interface VassalageRequestUpdate {
+  type: GameUpdateType.VassalageRequest;
+  requestorID: number;
+  recipientID: number;
+  vassalID: number,
+  empireID: number,
+  createdAt: Tick;
+}
+
+export interface VassalageRequestReplyUpdate {
+  type: GameUpdateType.VassalageRequestReply;
+  request: VassalageRequestUpdate;
+  accepted: boolean;
+}
+
+export interface BrokeVassalageUpdate {
+  type: GameUpdateType.BrokeVassalage;
+  traitorID: number;
+  betrayedID: number;
+  vassalageID: number;
 }
 
 export interface TargetPlayerUpdate {

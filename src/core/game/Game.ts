@@ -483,6 +483,21 @@ export interface Attack {
   clusteredPositions(): TileRef[];
 }
 
+export interface TileDonation {
+  id(): string;
+  cancel(): void;
+  readonly recipient: Player;
+  readonly sender: Player;
+  tiles(): number;
+  setTiles(tiles: number): void;
+  isActive(): boolean;
+  delete(): void;
+  addBorderTile(tile: TileRef): void;
+  removeBorderTile(tile: TileRef): void;
+  clearBorder(): void;
+  borderSize(): number;
+}
+
 export interface AllianceRequest {
   accept(): void;
   reject(): void;
@@ -502,14 +517,33 @@ export interface Alliance {
 
 export interface MutableAlliance extends Alliance {
   expire(): void;
-  other(player: Player): Player;
   bothAgreedToExtend(): boolean;
   addExtensionRequest(player: Player): void;
   id(): number;
   extend(): void;
   onlyOneAgreedToExtend(): boolean;
-
   agreedToExtend(player: Player): boolean;
+}
+
+export interface VassalageRequest {
+  accept(): void;
+  reject(): void;
+  requestor(): Player;
+  recipient(): Player;
+  vassal(): Player;
+  empire(): Player;
+  createdAt(): Tick;
+  status(): "pending" | "accepted" | "rejected";
+}
+
+export interface Vassalage {
+  requestor(): Player;
+  recipient(): Player;
+  vassal(): Player;
+  empire(): Player;
+  createdAt(): Tick;
+  other(player: Player): Player;
+  id(): number;
 }
 
 export class PlayerInfo {
@@ -673,6 +707,7 @@ export interface Player {
   addGold(toAdd: Gold, tile?: TileRef): void;
   removeGold(toRemove: Gold): Gold;
   troops(): number;
+  weightedEmpireTroops(weight?: number): number;
   setTroops(troops: number): void;
   addTroops(troops: number): void;
   removeTroops(troops: number): number;
@@ -730,6 +765,23 @@ export interface Player {
   removeAllAlliances(): void;
   createAllianceRequest(recipient: Player): AllianceRequest | null;
   betrayals(): number;
+  empire(): Player | null;
+  vassals(): Player[];
+  vassalages(): Vassalage[];
+  isVassalOf(other: Player): boolean;
+  isEmpireOf(other: Player): boolean;
+  incomingVassalageRequests(): VassalageRequest[];
+  outgoingVassalageRequests(): VassalageRequest[];
+  removeAllVassalages(): void;
+  vassalageWith(other: Player): Vassalage | null;
+  hasVassalageWith(other: Player): boolean;
+  canSendVassalageRequest(other: Player): boolean;
+  canSendSelfVassalageRequest(other: Player): boolean;
+  canBecomeVassalOf(other: Player): boolean;
+  canBecomeEmpireOf(other: Player): boolean;
+  breakVassalage(vassalage: Vassalage): void;
+  createVassalageRequest(recipient: Player): VassalageRequest | null;
+  createSelfVassalageRequest(recipient: Player): VassalageRequest | null;
 
   // Targeting
   canTarget(other: Player): boolean;
@@ -745,6 +797,7 @@ export interface Player {
   // Donation
   canDonateGold(recipient: Player): boolean;
   canDonateTroops(recipient: Player): boolean;
+  canDonateTiles(recipient: Player): boolean;
   donateTroops(recipient: Player, troops: number): boolean;
   donateGold(recipient: Player, gold: Gold): boolean;
   canDeleteUnit(): boolean;
@@ -774,8 +827,22 @@ export interface Player {
   ): Attack;
   outgoingAttacks(): Attack[];
   incomingAttacks(): Attack[];
+  getLastIncomingAttackTick(attacker: Player): number;
+  lastIncomingAttackTicks(): [Player, number][];
+  getRecentAttackers(inPastTicks: number): Player[];
+  getLastOutgoingAttackTick(attacker: Player): number;
+  lastOutgoingAttackTicks(): [Player, number][];
+  getRecentAttackTargets(inPastTicks: number): Player[];
   orderRetreat(attackID: string): void;
   executeRetreat(attackID: string): void;
+  
+  createTileDonation(
+    recipient: Player,
+    tiles: number,
+    border: Set<number>,
+  ): TileDonation;
+  outgoingTileDonations(): TileDonation[];
+  incomingTileDonations(): TileDonation[];
 
   // Misc
   toUpdate(): PlayerUpdate;
@@ -943,9 +1010,13 @@ export interface PlayerInteraction {
   canSendEmoji: boolean;
   canSendAllianceRequest: boolean;
   canBreakAlliance: boolean;
+  canSendVassalageRequest: boolean,
+  canSendSelfVassalageRequest: boolean,
+  canBreakVassalage: boolean,
   canTarget: boolean;
   canDonateGold: boolean;
   canDonateTroops: boolean;
+  canDonateTiles: boolean;
   canEmbargo: boolean;
   allianceInfo?: AllianceInfo;
 }

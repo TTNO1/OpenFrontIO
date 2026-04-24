@@ -270,6 +270,9 @@ export class DefaultConfig implements Config {
     }
     return BigInt(this._gameConfig.startingGold ?? 0);
   }
+  donateTiles(): boolean {
+    return this._gameConfig.donateTiles;
+  }
 
   trainSpawnRate(numPlayerFactories: number): number {
     // hyperbolic decay, midpoint at 10 factories
@@ -493,8 +496,11 @@ export class DefaultConfig implements Config {
     };
   }
 
-  defaultDonationAmount(sender: Player): number {
+  defaultDonationTroopAmount(sender: Player): number {
     return Math.floor(sender.troops() / 3);
+  }
+  defaultDonationTilesAmount(sender: Player): number {
+    return Math.floor(sender.numTilesOwned() / 20);
   }
   donateCooldown(): Tick {
     return 10 * 10;

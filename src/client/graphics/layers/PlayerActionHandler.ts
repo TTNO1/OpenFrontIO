@@ -9,6 +9,7 @@ import {
   SendBreakAllianceIntentEvent,
   SendDeleteUnitIntentEvent,
   SendDonateGoldIntentEvent,
+  SendDonateTilesIntentEvent,
   SendDonateTroopsIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
@@ -80,6 +81,14 @@ export class PlayerActionHandler {
       return;
     }
     this.eventBus.emit(new SendDonateTroopsIntentEvent(recipient, amount));
+  }
+  
+  handleDonateTiles(recipient: PlayerView, tiles?: number) {
+    const amount = tiles ?? null;
+    if (amount !== null && amount <= 0) {
+      return;
+    }
+    this.eventBus.emit(new SendDonateTilesIntentEvent(recipient, amount));
   }
 
   handleEmbargo(recipient: PlayerView, action: "start" | "stop") {

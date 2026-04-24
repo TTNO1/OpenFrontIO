@@ -114,6 +114,13 @@ export class SendDonateTroopsIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendDonateTilesIntentEvent implements GameEvent {
+  constructor(
+    public readonly recipient: PlayerView,
+    public readonly tiles: number | null,
+  ) {}
+}
+
 export class SendQuickChatEvent implements GameEvent {
   constructor(
     public readonly recipient: PlayerView,
@@ -227,6 +234,9 @@ export class Transport {
     );
     this.eventBus.on(SendDonateTroopsIntentEvent, (e) =>
       this.onSendDonateTroopIntent(e),
+    );
+    this.eventBus.on(SendDonateTilesIntentEvent, (e) =>
+      this.onSendDonateTilesIntent(e),
     );
     this.eventBus.on(SendQuickChatEvent, (e) => this.onSendQuickChatIntent(e));
     this.eventBus.on(SendEmbargoIntentEvent, (e) =>
@@ -526,6 +536,14 @@ export class Transport {
       type: "donate_troops",
       recipient: event.recipient.id(),
       troops: event.troops,
+    });
+  }
+  
+  private onSendDonateTilesIntent(event: SendDonateTilesIntentEvent) {
+    this.sendIntent({
+      type: "donate_tiles",
+      recipient: event.recipient.id(),
+      tiles: event.tiles,
     });
   }
 

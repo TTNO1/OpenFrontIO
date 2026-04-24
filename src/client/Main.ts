@@ -258,7 +258,7 @@ class Client {
   }> | null = null;
 
   async initialize(): Promise<void> {
-    crazyGamesSDK.maybeInit();
+    //crazyGamesSDK.maybeInit();
     // Prefetch turnstile token so it is available when
     // the user joins a lobby.
     this.turnstileTokenPromise = getTurnstileToken();

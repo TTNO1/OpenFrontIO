@@ -827,6 +827,7 @@
   "player_panel": {
     "gold": "Gold",
     "troops": "Troops",
+	"land": "Land",
     "betrayals": "Betrayals",
     "traitor": "Traitor",
     "trading": "Trading",
@@ -843,6 +844,7 @@
     "break_alliance": "Break Alliance",
     "send_alliance": "Send Alliance",
     "send_troops": "Send Troops",
+	"send_land": "Give Land",
     "send_gold": "Send Gold",
     "emotes": "Emojis",
     "moderation": "Moderation",

@@ -22,8 +22,9 @@ describe("Ranking class", () => {
   const mockConfig: GameConfig = {
     gameMap: GameMapType.Montreal,
     difficulty: Difficulty.Medium,
-    donateGold: false,
-    donateTroops: false,
+    donateGold: true,
+    donateTroops: true,
+    donateTiles: true,
     gameType: GameType.Public,
     gameMode: GameMode.FFA,
     gameMapSize: GameMapSize.Normal,

@@ -5,6 +5,7 @@ import { GameView, PlayerView } from "../../../core/game/GameView";
 import { within } from "../../../core/Util";
 import {
   SendDonateGoldIntentEvent,
+  SendDonateTilesIntentEvent,
   SendDonateTroopsIntentEvent,
 } from "../../Transport";
 import { renderTroops, translateText } from "../../Utils";
@@ -15,7 +16,7 @@ export class SendResourceModal extends LitElement {
   @property({ attribute: false }) eventBus: EventBus | null = null;
 
   @property({ type: Boolean }) open: boolean = false;
-  @property({ type: String }) mode: "troops" | "gold" = "troops";
+  @property({ type: String }) mode: "troops" | "gold" | "tiles" = "troops";
 
   @property({ type: Object }) total: number | bigint = 0;
   @property({ type: Object }) uiState: UIState | null = null; // to seed initial %
@@ -98,6 +99,10 @@ export class SendResourceModal extends LitElement {
       const myTroops = Number(myPlayer.troops());
       if (amount > myTroops) return;
       this.eventBus.emit(new SendDonateTroopsIntentEvent(target, amount));
+    } else if(this.mode === "tiles") {
+      const myTiles = myPlayer.numTilesOwned();
+      if (amount > myTiles) return;
+      this.eventBus.emit(new SendDonateTilesIntentEvent(target, amount));
     } else {
       const myGold = Number(myPlayer.gold());
       if (amount > myGold) return;
@@ -138,7 +143,7 @@ export class SendResourceModal extends LitElement {
     return within(p, 0, 100);
   }
 
-  /** Internal capacity only for troops; gold is unlimited. */
+  /** Internal capacity only for troops; gold is unlimited.*/
   private getCapacityLeft(): number | null {
     if (!this.isTargetAlive()) return 0;
     if (this.mode !== "troops") return null;
@@ -147,6 +152,17 @@ export class SendResourceModal extends LitElement {
     const max = this.toNum(this.gameView.config().maxTroops(this.target));
     return Math.max(0, max - current);
   }
+  
+  /*private async getTileCapacity(): number {
+    if (!this.gameView || !this.target) return 0;
+    let count = 0;
+    const borderTiles = await this.target.borderTiles();
+    for(const borderTile of borderTiles.borderTiles) {
+      for(const neighborTile of this.gameView.neighbors(borderTile)) {
+        
+      }
+    }
+  }*/
 
   private getPercentBasis(): number {
     return this.getTotalNumber();
@@ -176,13 +192,18 @@ export class SendResourceModal extends LitElement {
   }
 
   private getFillColor(): string {
-    return this.mode === "troops"
-      ? "rgb(168 85 247)" /* purple */
-      : "rgb(234 179 8)" /* amber */;
+    switch(this.mode) {
+      case "troops" :
+        return "rgb(168 85 247)";
+      case "gold" :
+        return "rgb(234 179 8)";
+      case "tiles" :
+        return "rgb(4, 147, 13)";
+    }
   }
 
   private getMinKeepRatio(): number {
-    return this.mode === "troops" ? 0.3 : 0;
+    return this.mode === "troops" || this.mode === "tiles" ? 0.3 : 0;
   }
 
   private isTargetAlive(): boolean {
@@ -194,24 +215,42 @@ export class SendResourceModal extends LitElement {
   }
 
   private i18n = {
-    title: (name: string) =>
-      this.mode === "troops"
-        ? translateText("send_troops_modal.title_with_name", { name })
-        : translateText("send_gold_modal.title_with_name", { name }),
+    title: (name: string) => {
+      switch (this.mode) {
+        case "troops":
+          return translateText("send_troops_modal.title_with_name", { name });
+        case "gold":
+          return translateText("send_gold_modal.title_with_name", { name });
+        case "tiles":
+          return translateText("send_tiles_modal.title_with_name", { name });
+      }
+    },
 
     availableChip: () => translateText("common.available"),
 
-    availableTooltip: () =>
-      this.mode === "troops"
-        ? translateText("send_troops_modal.available_tooltip")
-        : translateText("send_gold_modal.available_tooltip"),
+    availableTooltip: () => {
+      switch (this.mode) {
+        case "troops":
+          return translateText("send_troops_modal.available_tooltip");
+        case "gold":
+          return translateText("send_gold_modal.available_tooltip");
+        case "tiles":
+          return translateText("send_tiles_modal.available_tooltip");
+      }
+    },
 
     max: () => translateText("common.preset_max"),
 
-    ariaSlider: () =>
-      this.mode === "troops"
-        ? translateText("send_troops_modal.aria_slider")
-        : translateText("send_gold_modal.aria_slider"),
+    ariaSlider: () => {
+      switch (this.mode) {
+        case "troops":
+          return translateText("send_troops_modal.aria_slider");
+        case "gold":
+          return translateText("send_gold_modal.aria_slider");
+        case "tiles":
+          return translateText("send_tiles_modal.aria_slider");
+      }
+    },
 
     summarySend: () => translateText("common.summary_send"),
     summaryKeep: () => translateText("common.summary_keep"),
@@ -223,16 +262,25 @@ export class SendResourceModal extends LitElement {
     cap: () => translateText("common.cap_label"),
     capTooltip: () => translateText("common.cap_tooltip"),
 
-    sliderTooltip: (percent: number, amountStr: string) =>
-      this.mode === "troops"
-        ? translateText("send_troops_modal.slider_tooltip", {
+    sliderTooltip: (percent: number, amountStr: string) => {
+      switch (this.mode) {
+        case "troops":
+          return translateText("send_troops_modal.slider_tooltip", {
             percent,
             amount: amountStr,
-          })
-        : translateText("send_gold_modal.slider_tooltip", {
+          });
+        case "gold":
+          return translateText("send_gold_modal.slider_tooltip", {
             percent,
             amount: amountStr,
-          }),
+          });
+        case "tiles":
+          return translateText("send_tiles_modal.slider_tooltip", {
+            percent,
+            amount: amountStr,
+          });
+      }
+    },
 
     capacityNote: (amountStr: string) =>
       translateText("send_troops_modal.capacity_note", { amount: amountStr }),

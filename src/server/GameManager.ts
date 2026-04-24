@@ -66,8 +66,9 @@ export class GameManager {
       Date.now(),
       this.config,
       {
-        donateGold: false,
-        donateTroops: false,
+        donateGold: true,
+        donateTroops: true,
+        donateTiles: true,
         gameMap: GameMapType.World,
         gameType: GameType.Private,
         gameMapSize: GameMapSize.Normal,

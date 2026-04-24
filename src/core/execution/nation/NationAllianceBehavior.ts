@@ -12,6 +12,8 @@ import { AllianceExtensionExecution } from "../alliance/AllianceExtensionExecuti
 import { AllianceRequestExecution } from "../alliance/AllianceRequestExecution";
 import {
   EMOJI_CONFUSED,
+  EMOJI_DENY_ENEMY,
+  EMOJI_DENY_TRAITOR,
   EMOJI_HANDSHAKE,
   EMOJI_LOVE,
   EMOJI_SCARED_OF_THREAT,
@@ -89,8 +91,8 @@ export class NationAllianceBehavior {
     }
     // Nearly always reject traitors
     if (otherPlayer.isTraitor() && this.random.nextInt(0, 100) >= 10) {
-      if (isResponse && this.random.chance(3)) {
-        this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_CONFUSED);
+      if (isResponse && this.random.probability(0.7)) {
+        this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_DENY_TRAITOR);
       }
       return false;
     }
@@ -103,10 +105,10 @@ export class NationAllianceBehavior {
     // Easy (dumb) nations are blinded by hatred, they don't care about threats, they care about the relation
     // Impossible (smart) nations on the other hand are analyzing the facts
     if (this.isAlliancePartnerThreat(otherPlayer)) {
-      if (!isResponse && this.random.chance(6)) {
+      if (!isResponse && this.random.probability(0.7)) {
         this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_SCARED_OF_THREAT);
       }
-      if (isResponse && this.random.chance(6)) {
+      if (isResponse && this.random.probability(0.7)) {
         this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_LOVE);
       }
       return true;
@@ -117,8 +119,8 @@ export class NationAllianceBehavior {
     }
     // Reject if relation is bad
     if (this.player.relation(otherPlayer) < Relation.Neutral) {
-      if (isResponse && this.random.chance(3)) {
-        this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_CONFUSED);
+      if (isResponse && this.random.probability(0.7)) {
+        this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_DENY_ENEMY);
       }
       return false;
     }
@@ -376,7 +378,7 @@ export class NationAllianceBehavior {
       if (
         otherPlayer.troops() + otherPlayerOutgoingTroops <
           otherPlayerMaxTroops * 0.2 &&
-        otherPlayer.troops() < this.player.troops()
+        otherPlayer.weightedEmpireTroops() < this.player.troops()
       ) {
         this.betray(otherPlayer);
         return true;

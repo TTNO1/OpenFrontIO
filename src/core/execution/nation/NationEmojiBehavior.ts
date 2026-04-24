@@ -28,7 +28,9 @@ export const EMOJI_GOT_INSULTED = (["🖕", "😡", "🤡", "😞", "😭"] as c
   emojiId,
 );
 export const EMOJI_LOVE = (["❤️", "😊", "🥰"] as const).map(emojiId);
-export const EMOJI_CONFUSED = (["❓", "🤡"] as const).map(emojiId);
+export const EMOJI_CONFUSED = (["❓"] as const).map(emojiId);
+export const EMOJI_DENY_TRAITOR = (["🐍", "🗡️", "💔"] as const).map(emojiId);
+export const EMOJI_DENY_ENEMY = (["🤨", "⚔️"] as const).map(emojiId);
 export const EMOJI_BRAG = (["👑", "🥇", "💪"] as const).map(emojiId);
 export const EMOJI_CHARM_ALLIES = (["🤝", "😇", "💪"] as const).map(emojiId);
 export const EMOJI_CLOWN = (["🤡", "🤦‍♂️"] as const).map(emojiId);
@@ -43,6 +45,7 @@ export const EMOJI_HANDSHAKE = (["🤝"] as const).map(emojiId);
 export const EMOJI_DONATION_OK = (["👍"] as const).map(emojiId);
 export const EMOJI_DONATION_TOO_SMALL = (["❓", "🥱"] as const).map(emojiId);
 export const EMOJI_GREET = (["👋"] as const).map(emojiId);
+export const EMOJI_DEFENSE_THANKS = EMOJI_LOVE.concat(EMOJI_CHARM_ALLIES);
 
 export class NationEmojiBehavior {
   private readonly lastEmojiSent = new Map<Player, Tick>();

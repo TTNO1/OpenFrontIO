@@ -226,8 +226,12 @@ export class GameRunner {
         canTarget: player.canTarget(other),
         canSendAllianceRequest: player.canSendAllianceRequest(other),
         canBreakAlliance: player.isAlliedWith(other),
+        canSendVassalageRequest: player.canSendVassalageRequest(other),
+        canSendSelfVassalageRequest: player.canSendSelfVassalageRequest(other),
+        canBreakVassalage: player.hasVassalageWith(other),
         canDonateGold: player.canDonateGold(other),
         canDonateTroops: player.canDonateTroops(other),
+        canDonateTiles: player.canDonateTiles(other),
         canEmbargo: !player.hasEmbargoAgainst(other),
         allianceInfo: player.allianceInfo(other) ?? undefined,
       };

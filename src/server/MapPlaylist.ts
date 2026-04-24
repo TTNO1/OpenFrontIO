@@ -145,8 +145,9 @@ export class MapPlaylist {
       mode === GameMode.Team ? this.getTeamCount(map) : undefined;
 
     return {
-      donateGold: mode === GameMode.Team,
-      donateTroops: mode === GameMode.Team,
+      donateGold: true,
+      donateTroops: true,
+      donateTiles: true,
       gameMap: map,
       maxPlayers: await this.lobbyMaxPlayers(map, mode, playerTeams, false),
       gameType: GameType.Public,
@@ -271,8 +272,9 @@ export class MapPlaylist {
         : "default";
 
     return {
-      donateGold: mode === GameMode.Team,
-      donateTroops: mode === GameMode.Team,
+      donateGold: true,
+      donateTroops: true,
+      donateTiles: true,
       gameMap: map,
       maxPlayers,
       gameType: GameType.Public,
@@ -320,8 +322,9 @@ export class MapPlaylist {
     ];
     const isCompact = Math.random() < 0.5;
     return {
-      donateGold: false,
-      donateTroops: false,
+      donateGold: true,
+      donateTroops: true,
+      donateTiles: true,
       gameMap: maps[Math.floor(Math.random() * maps.length)],
       maxPlayers: 2,
       gameType: GameType.Public,

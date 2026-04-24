@@ -13,7 +13,8 @@ import {
 } from "../game/Game";
 import { TileRef } from "../game/GameMap";
 import { PseudoRandom } from "../PseudoRandom";
-import { assertNever } from "../Util";
+import { assertNever, flattenedEmojiTable } from "../Util";
+import { EMOJI_DEFENSE_THANKS } from "./nation/NationEmojiBehavior";
 import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
 
 const malusForRetreat = 25;
@@ -148,24 +149,52 @@ export class AttackExecution implements Execution {
 
     if (this.target.isPlayer()) {
       const difficulty = this.mg.config().gameConfig().difficulty;
-      let relationChange: number;
+      let targetRelationChange: number;
+      let enemyOfMyEnemyRelationChange: number;
+      let minTroopsFractionForEOERelationUpdate;
       switch (difficulty) {
         case Difficulty.Easy:
-          relationChange = -60;
+          targetRelationChange = -60;
+          enemyOfMyEnemyRelationChange = 60;
+          minTroopsFractionForEOERelationUpdate = 0.03;
           break;
         case Difficulty.Medium:
-          relationChange = -70;
+          targetRelationChange = -70;
+          enemyOfMyEnemyRelationChange = 50;
+          minTroopsFractionForEOERelationUpdate = 0.07;
           break;
         case Difficulty.Hard:
-          relationChange = -80;
+          targetRelationChange = -80;
+          enemyOfMyEnemyRelationChange = 30;
+          minTroopsFractionForEOERelationUpdate = 0.1;
           break;
         case Difficulty.Impossible:
-          relationChange = -100;
+          targetRelationChange = -100;
+          enemyOfMyEnemyRelationChange = 15;
+          minTroopsFractionForEOERelationUpdate = 0.17;
           break;
         default:
           assertNever(difficulty);
       }
-      this.target.updateRelation(this._owner, relationChange);
+      this.target.updateRelation(this._owner, targetRelationChange);
+      
+      const attackCooldown = 600;
+      if(mg.ticks() - this._owner.getLastOutgoingAttackTick(this.target) > attackCooldown) {
+        const recentAttackWindow = 100;
+        const targetTargets = this.target.getRecentAttackTargets(recentAttackWindow);
+        const ownerTargets = this._owner.getRecentAttackTargets(attackCooldown);
+        const enemiesOfMyEnemy = targetTargets.filter(target => target.isPlayer() && !ownerTargets.includes(target));
+        for(const player of enemiesOfMyEnemy) {
+          player satisfies Player;
+          const playerMaxTroops = this.mg.config().maxTroops(player);
+          if(this.startTroops >= playerMaxTroops * minTroopsFractionForEOERelationUpdate) {
+            player.updateRelation(this._owner, enemyOfMyEnemyRelationChange);
+            if(player.type() !== PlayerType.Human && player.canSendEmoji(this._owner)) {
+              player.sendEmoji(this._owner, this.random.randElement(EMOJI_DEFENSE_THANKS.map(emojiId => flattenedEmojiTable[emojiId])));
+            }
+          }
+        }
+      }
     }
   }
 
@@ -265,9 +294,15 @@ export class AttackExecution implements Execution {
       }
 
       if (this.toConquer.size() === 0) {
+        if (this.sourceTile !== null) {
+          this.retreat();
+          return;
+        }
         this.refreshToConquer();
-        this.retreat();
-        return;
+        if (this.toConquer.size() === 0) {
+          this.retreat();
+          return;
+        }
       }
 
       const [tileToConquer] = this.toConquer.dequeue();

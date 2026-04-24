@@ -258,7 +258,7 @@ export class AiAttackBehavior {
       // borderingEnemies is already sorted by troops (ascending), so first match is weakest afk enemy
       const afk = borderingEnemies.find(
         (enemy) =>
-          enemy.isDisconnected() && enemy.troops() < this.player.troops() * 3,
+          enemy.isDisconnected() && enemy.weightedEmpireTroops(0.25) < this.player.troops() * 3,
       );
       if (afk) {
         this.sendAttack(afk);
@@ -292,7 +292,7 @@ export class AiAttackBehavior {
         if (relation.relation !== Relation.Hostile) continue;
         const other = relation.player;
         if (this.player.isFriendly(other)) continue;
-        if (other.troops() > this.player.troops() * 3) continue;
+        if (other.weightedEmpireTroops() > this.player.troops() * 3) continue;
         this.sendAttack(other);
         return true;
       }
@@ -313,7 +313,7 @@ export class AiAttackBehavior {
         // borderingEnemies is already sorted by troops (ascending), so first match is weakest
         const weakest = borderingEnemies[0];
         // Don't attack if they have more troops than us
-        if (weakest.troops() < this.player.troops()) {
+        if (weakest.troops() < this.player.weightedEmpireTroops()) {
           this.sendAttack(weakest);
           return true;
         }
@@ -492,7 +492,7 @@ export class AiAttackBehavior {
     return (
       borderingEnemies.find(
         (enemy) =>
-          enemy.isTraitor() && enemy.troops() < this.player.troops() * 1.2,
+          enemy.isTraitor() && enemy.weightedEmpireTroops() < this.player.troops() * 1.2,
       ) ?? null
     );
   }
@@ -539,7 +539,7 @@ export class AiAttackBehavior {
     // borderingEnemies is already sorted by troops (ascending), so first match is weakest victim
     return (
       borderingEnemies.find((enemy) => {
-        if (enemy.troops() > this.player.troops() * 1.2) return false;
+        if (enemy.weightedEmpireTroops() > this.player.troops() * 1.2) return false;
 
         const totalIncomingTroops = enemy
           .incomingAttacks()
@@ -557,7 +557,7 @@ export class AiAttackBehavior {
       const enemyMaxTroops = this.game.config().maxTroops(enemy);
       return (
         enemy.troops() < enemyMaxTroops * 0.15 &&
-        enemy.troops() < this.player.troops() * 1.2
+        enemy.weightedEmpireTroops() < this.player.troops() * 1.2
       );
     });
 
@@ -584,7 +584,7 @@ export class AiAttackBehavior {
       if (p === this.player) return false;
       if (this.player.isFriendly(p)) return false;
       // Don't spam boats into players with more troops
-      return p.troops() < this.player.troops();
+      return p.weightedEmpireTroops() < this.player.troops();
     });
 
     if (filteredPlayers.length === 0) return null;

@@ -431,5 +431,6 @@ export class PlayerExecution implements Execution {
     });
 
     this.player.removeAllAlliances();
+    this.player.removeAllVassalages();
   }
 }

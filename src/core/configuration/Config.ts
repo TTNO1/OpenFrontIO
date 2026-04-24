@@ -72,6 +72,7 @@ export interface Config {
   donateGold(): boolean;
   infiniteTroops(): boolean;
   donateTroops(): boolean;
+  donateTiles(): boolean;
   instantBuild(): boolean;
   disableNavMesh(): boolean;
   disableAlliances(): boolean;
@@ -124,7 +125,8 @@ export interface Config {
   embargoAllCooldown(): Tick;
   deletionMarkDuration(): Tick;
   deleteUnitCooldown(): Tick;
-  defaultDonationAmount(sender: Player): number;
+  defaultDonationTroopAmount(sender: Player): number;
+  defaultDonationTilesAmount(sender: Player): number;
   unitInfo(type: UnitType): UnitInfo;
   tradeShipShortRangeDebuff(): number;
   tradeShipGold(dist: number): Gold;

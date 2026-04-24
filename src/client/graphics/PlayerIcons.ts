@@ -23,7 +23,9 @@ export type PlayerIconId =
   | "target"
   | "emoji"
   | "embargo"
-  | "nuke";
+  | "nuke"
+  | "vassal"
+  | "empire";
 
 export type PlayerIconKind = "image" | "emoji";
 

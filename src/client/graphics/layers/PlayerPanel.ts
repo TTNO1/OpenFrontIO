@@ -43,6 +43,7 @@ import allianceIcon from "/images/AllianceIconWhite.svg?url";
 import chatIcon from "/images/ChatIconWhite.svg?url";
 import donateGoldIcon from "/images/DonateGoldIconWhite.svg?url";
 import donateTroopIcon from "/images/DonateTroopIconWhite.svg?url";
+import donateTilesIcon from "/images/DonateTilesIconWhite.svg?url";
 import emojiIcon from "/images/EmojiIconWhite.svg?url";
 import shieldIcon from "/images/ShieldIconWhite.svg?url";
 import stopTradingIcon from "/images/StopIconWhite.png?url";
@@ -64,7 +65,7 @@ export class PlayerPanel extends LitElement implements Layer {
   private kickedPlayerIDs = new Set<string>();
 
   @state() private sendTarget: PlayerView | null = null;
-  @state() private sendMode: "troops" | "gold" | "none" = "none";
+  @state() private sendMode: "troops" | "gold" | "tiles" | "none" = "none";
   @state() public isVisible: boolean = false;
   @state() private allianceExpiryText: string | null = null;
   @state() private allianceExpirySeconds: number | null = null;
@@ -210,6 +211,12 @@ export class PlayerPanel extends LitElement implements Layer {
     this.sendTarget = target;
     this.sendMode = "gold";
   }
+  
+  private openSendTiles(target: PlayerView) {
+    this.suppressNextHide = true;
+    this.sendTarget = target;
+    this.sendMode = "tiles";
+  }
 
   private handleDonateTroopClick(
     e: Event,
@@ -227,6 +234,15 @@ export class PlayerPanel extends LitElement implements Layer {
   ) {
     e.stopPropagation();
     this.openSendGold(other);
+  }
+  
+  private handleDonateTilesClick(
+    e: Event,
+    myPlayer: PlayerView,
+    other: PlayerView,
+  ) {
+    e.stopPropagation();
+    this.openSendTiles(other);
   }
 
   private closeSend = () => {
@@ -703,6 +719,7 @@ export class PlayerPanel extends LitElement implements Layer {
     const myPlayer = this.g.myPlayer();
     const canDonateGold = this.actions?.interaction?.canDonateGold;
     const canDonateTroops = this.actions?.interaction?.canDonateTroops;
+    const canDonateTiles = this.actions?.interaction?.canDonateTiles;
     const canSendAllianceRequest =
       this.actions?.interaction?.canSendAllianceRequest;
     const canSendEmoji =
@@ -762,6 +779,17 @@ export class PlayerPanel extends LitElement implements Layer {
                 iconAlt: "Gold",
                 title: translateText("player_panel.send_gold"),
                 label: translateText("player_panel.gold"),
+                type: "normal",
+              })
+            : ""}
+          ${canDonateTiles
+            ? actionButton({
+                onClick: (e: MouseEvent) =>
+                  this.handleDonateTilesClick(e, my, other),
+                icon: donateTilesIcon,
+                iconAlt: "Land",
+                title: translateText("player_panel.send_land"),
+                label: translateText("player_panel.land"),
                 type: "normal",
               })
             : ""}
@@ -865,6 +893,7 @@ export class PlayerPanel extends LitElement implements Layer {
     const other = owner as PlayerView;
     const myGoldNum = my.gold();
     const myTroopsNum = Number(my.troops());
+    const myTilesNum = my.numTilesOwned();
 
     return html`
       <style>
@@ -941,7 +970,9 @@ export class PlayerPanel extends LitElement implements Layer {
                             .mode=${this.sendMode}
                             .total=${this.sendMode === "troops"
                               ? myTroopsNum
-                              : myGoldNum}
+                              : this.sendMode === "gold" ?
+                              myGoldNum
+                              : myTilesNum}
                             .uiState=${this.uiState}
                             .myPlayer=${my}
                             .target=${this.sendTarget}

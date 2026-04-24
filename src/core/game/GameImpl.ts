@@ -40,6 +40,8 @@ import {
   Unit,
   UnitInfo,
   UnitType,
+  Vassalage,
+  VassalageRequest,
 } from "./Game";
 import { GameMap, TileRef } from "./GameMap";
 import { GameUpdate, GameUpdateType } from "./GameUpdates";
@@ -52,6 +54,8 @@ import { StatsImpl } from "./StatsImpl";
 import { assignTeams } from "./TeamAssignment";
 import { TerraNulliusImpl } from "./TerraNulliusImpl";
 import { UnitGrid, UnitPredicate } from "./UnitGrid";
+import { VassalageImpl } from "./VassalageImpl";
+import { VassalageRequestImpl } from "./VassalageRequestImpl";
 
 export function createGame(
   humans: PlayerInfo[],
@@ -90,6 +94,9 @@ export class GameImpl implements Game {
 
   allianceRequests: AllianceRequestImpl[] = [];
   alliances_: AllianceImpl[] = [];
+  
+  vassalageRequests: VassalageRequestImpl[] = [];
+  vassalages_: VassalageImpl[] = [];
 
   private nextPlayerID = 1;
   private _nextUnitID = 1;
@@ -368,6 +375,126 @@ export class GameImpl implements Game {
     });
   }
 
+  createVassalageRequest(
+    requestor: Player,
+    recipient: Player,
+    vassal: Player,
+    empire: Player,
+  ): VassalageRequest | null {
+    if (vassal.isVassalOf(empire)) {
+      console.log("cannot request vassalage, already vassal");
+      return null;
+    }
+    if (
+      recipient
+        .incomingVassalageRequests()
+        .find((vr) => vr.requestor() === requestor) !== undefined
+    ) {
+      console.log(`duplicate vassalage request from ${requestor.name()}`);
+      return null;
+    }
+    const correspondingReq = requestor
+      .incomingVassalageRequests()
+      .find((vr) => vr.requestor() === recipient && vr.vassal() === vassal);
+    if (correspondingReq !== undefined) {
+      console.log(`got corresponding vassalage requests, accepting`);
+      correspondingReq.accept();
+      return null;
+    }
+    const vr = new VassalageRequestImpl(requestor, recipient, vassal, empire, this._ticks, this);
+    this.vassalageRequests.push(vr);
+    this.addUpdate(vr.toUpdate());
+    return vr;
+  }
+
+  acceptVassalageRequest(request: VassalageRequestImpl) {
+    this.vassalageRequests = this.vassalageRequests.filter(
+      (vr) => vr !== request,
+    );
+
+    const requestor = request.requestor();
+    const recipient = request.recipient();
+    const vassal = request.vassal();
+    const empire = request.empire();
+
+    if (requestor.hasVassalageWith(recipient)) {
+      throw new Error(
+        `cannot accept vassalage request, already vassaled with ${recipient.name()}`,
+      );
+    }
+    
+    //TODO left off: make sure we can accept this (not vasseling empire of empire, etc.)
+
+    // Remove alliance if there was one
+    const alliance = requestor.allianceWith(recipient);
+    if(alliance !== null) {
+      this.alliances_ = this.alliances_.filter((a) => a !== alliance);
+    }
+    
+    // Create and register the new vassalage
+    const vassalage = new VassalageImpl(
+      this,
+      requestor,
+      recipient,
+      vassal,
+      empire,
+      this._ticks,
+      this.nextAllianceID++,
+    );
+    this.vassalages_.push(vassalage);
+    (request.requestor() as PlayerImpl).pastOutgoingVassalageRequests.push(
+      request,
+    );
+
+    this.addUpdate({
+      type: GameUpdateType.VassalageRequestReply,
+      request: request.toUpdate(),
+      accepted: true,
+    });
+  }
+
+  rejectVassalageRequest(request: VassalageRequestImpl) {
+    this.vassalageRequests = this.vassalageRequests.filter(
+      (vr) => vr !== request,
+    );
+    (request.requestor() as PlayerImpl).pastOutgoingVassalageRequests.push(
+      request,
+    );
+    this.addUpdate({
+      type: GameUpdateType.VassalageRequestReply,
+      request: request.toUpdate(),
+      accepted: false,
+    });
+  }
+  
+    public breakVassalage(breaker: Player, vassalage: Vassalage) {
+    const other = vassalage.other(breaker);
+    
+    if (breaker.hasVassalageWith(other)) {
+      throw new Error(
+        `${breaker} not vassaled with ${other}, cannot break vassalage`,
+      );
+    }
+    if (!other.isTraitor() && !other.isDisconnected()) {
+      breaker.markTraitor();
+    }
+
+    this.vassalages_ = this.vassalages_.filter((v) => v !== vassalage);
+
+    this.addUpdate({
+      type: GameUpdateType.BrokeVassalage,
+      traitorID: breaker.smallID(),
+      betrayedID: other.smallID(),
+      vassalageID: vassalage.id(),
+    });
+  }
+  
+  public removeVassalagesByPlayerSilently(player: Player): void {
+    this.vassalages_ = this.vassalages_.filter(
+      (v) => v.requestor() !== player && v.recipient() !== player,
+    );
+  }
+  
   hasPlayer(id: PlayerID): boolean {
     return this._players.has(id);
   }

@@ -25,11 +25,11 @@ export class DevServerConfig extends DefaultServerConfig {
   }
 
   gameCreationRate(): number {
-    return 5 * 1000;
+    return 500 * 1000;
   }
 
   numWorkers(): number {
-    return 2;
+    return 1;
   }
   jwtAudience(): string {
     return "localhost";

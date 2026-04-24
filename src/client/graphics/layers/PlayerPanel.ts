@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import Countries from "resources/countries.json" with { type: "json" };
+import { assetUrl } from "../../../core/AssetUrls";
 import { EventBus } from "../../../core/EventBus";
 import {
   AllPlayers,
@@ -39,18 +40,18 @@ import { EmojiTable } from "./EmojiTable";
 import { Layer } from "./Layer";
 import "./PlayerModerationModal";
 import "./SendResourceModal";
-import allianceIcon from "/images/AllianceIconWhite.svg?url";
-import chatIcon from "/images/ChatIconWhite.svg?url";
-import donateGoldIcon from "/images/DonateGoldIconWhite.svg?url";
-import donateTroopIcon from "/images/DonateTroopIconWhite.svg?url";
-import donateTilesIcon from "/images/DonateTilesIconWhite.svg?url";
-import emojiIcon from "/images/EmojiIconWhite.svg?url";
-import shieldIcon from "/images/ShieldIconWhite.svg?url";
-import stopTradingIcon from "/images/StopIconWhite.png?url";
-import targetIcon from "/images/TargetIconWhite.svg?url";
-import startTradingIcon from "/images/TradingIconWhite.png?url";
-import traitorIcon from "/images/TraitorIconLightRed.svg?url";
-import breakAllianceIcon from "/images/TraitorIconWhite.svg?url";
+const allianceIcon = assetUrl("images/AllianceIconWhite.svg");
+const chatIcon = assetUrl("images/ChatIconWhite.svg");
+const donateGoldIcon = assetUrl("images/DonateGoldIconWhite.svg");
+const donateTroopIcon = assetUrl("images/DonateTroopIconWhite.svg");
+const donateTilesIcon = assetUrl("/images/DonateTilesIconWhite.svg?url");
+const emojiIcon = assetUrl("images/EmojiIconWhite.svg");
+const shieldIcon = assetUrl("images/ShieldIconWhite.svg");
+const stopTradingIcon = assetUrl("images/StopIconWhite.png");
+const targetIcon = assetUrl("images/TargetIconWhite.svg");
+const startTradingIcon = assetUrl("images/TradingIconWhite.png");
+const traitorIcon = assetUrl("images/TraitorIconLightRed.svg");
+const breakAllianceIcon = assetUrl("images/TraitorIconWhite.svg");
 
 @customElement("player-panel")
 export class PlayerPanel extends LitElement implements Layer {
@@ -72,6 +73,15 @@ export class PlayerPanel extends LitElement implements Layer {
   @state() private otherProfile: PlayerProfile | null = null;
   @state() private suppressNextHide: boolean = false;
   @state() private moderationTarget: PlayerView | null = null;
+  @state() private playerRole: string | null = null;
+
+  setRole(role: string | null): void {
+    this.playerRole = role;
+  }
+
+  private get isAdminRole(): boolean {
+    return this.playerRole === "admin" || this.playerRole === "root";
+  }
 
   private ctModal: ChatModal;
 
@@ -456,8 +466,12 @@ export class PlayerPanel extends LitElement implements Layer {
     `;
   }
 
-  private renderModeration(my: PlayerView, other: PlayerView) {
-    if (!my.isLobbyCreator()) return html``;
+  private renderModeration(
+    my: PlayerView,
+    other: PlayerView,
+    isAdmin: boolean,
+  ) {
+    if (!my.isLobbyCreator() && !isAdmin) return html``;
     const moderationTitle = translateText("player_panel.moderation");
 
     return html`
@@ -509,7 +523,7 @@ export class PlayerPanel extends LitElement implements Layer {
       <div class="flex items-center gap-2.5 flex-wrap">
         ${country && typeof flagCode === "string"
           ? html`<img
-              src="/flags/${encodeURIComponent(flagCode)}.svg"
+              src=${assetUrl(`flags/${encodeURIComponent(flagCode)}.svg`)}
               alt=${country?.name ?? "Flag"}
               class="h-10 w-10 rounded-full object-cover"
               @error=${(e: Event) => {
@@ -872,7 +886,7 @@ export class PlayerPanel extends LitElement implements Layer {
               })}
             </div>`
           : ""}
-        ${this.renderModeration(my, other)}
+        ${this.renderModeration(my, other, this.isAdminRole)}
       </div>
     `;
   }
@@ -993,6 +1007,7 @@ export class PlayerPanel extends LitElement implements Layer {
                             .myPlayer=${my}
                             .target=${this.moderationTarget}
                             .eventBus=${this.eventBus}
+                            .isAdmin=${this.isAdminRole}
                             .alreadyKicked=${this.kickedPlayerIDs.has(
                               String(this.moderationTarget.id()),
                             )}

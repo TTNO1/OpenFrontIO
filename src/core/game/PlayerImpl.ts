@@ -2,12 +2,12 @@ import { renderNumber, renderTroops } from "../../client/Utils";
 import { PseudoRandom } from "../PseudoRandom";
 import { ClientID } from "../Schemas";
 import {
-	assertNever,
-	distSortUnit,
-	minInt,
-	simpleHash,
-	toInt,
-	within,
+  assertNever,
+  findClosestBy,
+  minInt,
+  simpleHash,
+  toInt,
+  within,
 } from "../Util";
 import { AttackImpl } from "./AttackImpl";
 import {
@@ -158,7 +158,7 @@ export class PlayerImpl implements Player {
 			traitorRemainingTicks: this.getTraitorRemainingTicks(),
 			targets: this.targets().map((p) => p.smallID()),
 			outgoingEmojis: this.outgoingEmojis(),
-			outgoingAttacks: this._outgoingAttacks.map((a) => {
+			outgoingAttacks: this.outgoingAttacks().map((a) => {
 				return {
 					attackerID: a.attacker().smallID(),
 					targetID: a.target().smallID(),
@@ -167,7 +167,7 @@ export class PlayerImpl implements Player {
 					retreating: a.retreating(),
 				} satisfies AttackUpdate;
 			}),
-			incomingAttacks: this._incomingAttacks.map((a) => {
+			incomingAttacks: this.incomingAttacks().map((a) => {
 				return {
 					attackerID: a.attacker().smallID(),
 					targetID: a.target().smallID(),
@@ -1213,19 +1213,23 @@ export class PlayerImpl implements Player {
 		return unit;
 	}
 
-	private findExistingUnitToUpgrade(
-		type: UnitType,
-		targetTile: TileRef,
-	): Unit | false {
-		const range = this.mg.config().structureMinDist();
-		const existing = this.mg
-			.nearbyUnits(targetTile, range, type, undefined, true)
-			.sort((a, b) => a.distSquared - b.distSquared);
-		if (existing.length === 0) {
-			return false;
-		}
-		return existing[0].unit;
-	}
+  private findExistingUnitToUpgrade(
+    type: UnitType,
+    targetTile: TileRef,
+  ): Unit | false {
+    const closest = findClosestBy(
+      this.mg.nearbyUnits(
+        targetTile,
+        this.mg.config().structureMinDist(),
+        type,
+        undefined,
+        true,
+      ),
+      (entry) => entry.distSquared,
+    );
+
+    return closest?.unit ?? false;
+  }
 
 	private canBuildUnitType(
 		unitType: UnitType,
@@ -1389,87 +1393,92 @@ export class PlayerImpl implements Player {
 		}
 	}
 
-	nukeSpawn(tile: TileRef, nukeType: UnitType): TileRef | false {
-		if (this.mg.isSpawnImmunityActive()) {
-			return false;
-		}
-		const owner = this.mg.owner(tile);
-		// Allow nuking teammates after the game is over (aftergame fun)
-		const gameOver = this.mg.getWinner() !== null;
-		if (owner.isPlayer()) {
-			if (this.isOnSameTeam(owner) && !gameOver) {
-				return false;
-			}
-		}
+  nukeSpawn(tile: TileRef, nukeType: UnitType): TileRef | false {
+    const mg = this.mg;
+    if (mg.isSpawnImmunityActive()) {
+      return false;
+    }
+    const owner = this.mg.owner(tile);
+    // Allow nuking teammates after the game is over (aftergame fun)
+    const gameOver = mg.getWinner() !== null;
+    if (owner.isPlayer()) {
+      if (this.isOnSameTeam(owner) && !gameOver) {
+        return false;
+      }
+    }
+    const config = mg.config();
 
-		// Prevent launching nukes that would hit teammate structures (only in team games).
-		// Disabled after game-over so players can nuke teammates in the aftergame.
-		if (
-			this.mg.config().gameConfig().gameMode === GameMode.Team &&
-			nukeType !== UnitType.MIRV &&
-			!gameOver
-		) {
-			const magnitude = this.mg.config().nukeMagnitudes(nukeType);
-			const wouldHitTeammate = this.mg.anyUnitNearby(
-				tile,
-				magnitude.outer,
-				Structures.types,
-				(unit) => unit.owner().isPlayer() && this.isOnSameTeam(unit.owner()),
-			);
-			if (wouldHitTeammate) {
-				return false;
-			}
-		}
+    // Prevent launching nukes that would hit teammate structures (only in team games).
+    // Disabled after game-over so players can nuke teammates in the aftergame.
+    if (
+      config.gameConfig().gameMode === GameMode.Team &&
+      nukeType !== UnitType.MIRV &&
+      !gameOver
+    ) {
+      const magnitude = config.nukeMagnitudes(nukeType);
+      const wouldHitTeammate = mg.anyUnitNearby(
+        tile,
+        magnitude.outer,
+        Structures.types,
+        (unit) => unit.owner().isPlayer() && this.isOnSameTeam(unit.owner()),
+      );
+      if (wouldHitTeammate) {
+        return false;
+      }
+    }
 
-		// only get missilesilos that are not on cooldown and not under construction
-		const spawns = this.units(UnitType.MissileSilo)
-			.filter((silo) => {
-				return !silo.isInCooldown() && !silo.isUnderConstruction();
-			})
-			.sort(distSortUnit(this.mg, tile));
-		if (spawns.length === 0) {
-			return false;
-		}
-		return spawns[0].tile();
-	}
+    // only get missilesilos that are not on cooldown and not under construction
+    const bestSilo = findClosestBy(
+      this.units(UnitType.MissileSilo),
+      (silo) => mg.manhattanDist(silo.tile(), tile),
+      (silo) =>
+        silo.isActive() && !silo.isInCooldown() && !silo.isUnderConstruction(),
+    );
 
-	portSpawn(tile: TileRef, validTiles: TileRef[] | null): TileRef | false {
-		const spawns = Array.from(
-			this.mg.bfs(
-				tile,
-				manhattanDistFN(tile, this.mg.config().radiusPortSpawn()),
-			),
-		)
-			.filter((t) => this.mg.owner(t) === this && this.mg.isOceanShore(t))
-			.sort(
-				(a, b) =>
-					this.mg.manhattanDist(a, tile) - this.mg.manhattanDist(b, tile),
-			);
-		const validTileSet = new Set(
-			validTiles ?? this.validStructureSpawnTiles(tile),
-		);
-		for (const t of spawns) {
-			if (validTileSet.has(t)) {
-				return t;
-			}
-		}
-		return false;
-	}
+    return bestSilo?.tile() ?? false;
+  }
 
-	warshipSpawn(tile: TileRef): TileRef | false {
-		if (!this.mg.isOcean(tile)) {
-			return false;
-		}
-		const spawns = this.units(UnitType.Port).sort(
-			(a, b) =>
-				this.mg.manhattanDist(a.tile(), tile) -
-				this.mg.manhattanDist(b.tile(), tile),
-		);
-		if (spawns.length === 0) {
-			return false;
-		}
-		return spawns[0].tile();
-	}
+  portSpawn(tile: TileRef, validTiles: TileRef[] | null): TileRef | false {
+    const spawns = Array.from(
+      this.mg.bfs(
+        tile,
+        manhattanDistFN(tile, this.mg.config().radiusPortSpawn()),
+      ),
+    )
+      .filter((t) => this.mg.owner(t) === this && this.mg.isShore(t))
+      .sort(
+        (a, b) =>
+          this.mg.manhattanDist(a, tile) - this.mg.manhattanDist(b, tile),
+      );
+    const validTileSet = new Set(
+      validTiles ?? this.validStructureSpawnTiles(tile),
+    );
+    for (const t of spawns) {
+      if (validTileSet.has(t)) {
+        return t;
+      }
+    }
+    return false;
+  }
+
+  warshipSpawn(tile: TileRef): TileRef | false {
+    if (!this.mg.isWater(tile)) {
+      return false;
+    }
+
+    const tileComponent = this.mg.getWaterComponent(tile);
+    const bestPort = findClosestBy(
+      this.units(UnitType.Port),
+      (port) => this.mg.manhattanDist(port.tile(), tile),
+      (port) =>
+        port.isActive() &&
+        !port.isUnderConstruction() &&
+        tileComponent !== null &&
+        this.mg.hasWaterComponent(port.tile(), tileComponent),
+    );
+
+    return bestPort?.tile() ?? false;
+  }
 
 	landBasedUnitSpawn(tile: TileRef): TileRef | false {
 		return this.mg.isLand(tile) ? tile : false;

@@ -1,26 +1,22 @@
-import { FetchGameMapLoader } from "src/core/game/FetchGameMapLoader";
-import { GameMapType } from "src/core/game/Game";
-import { GameMapLoader } from "src/core/game/GameMapLoader";
+import { GameMapType } from "@openfront/engine-api/game/GameTypes";
 import { logger } from "./Logger";
-
-let mapLoader: GameMapLoader | null = null;
+import { readMapFile } from "./MapFiles";
 
 const log = logger.child({ component: "MapLandTiles" });
 
-// Gets or creates the map loader, uses FetchGameMapLoader pointing to the master server.
-function getMapLoader(): GameMapLoader {
-  mapLoader ??= new FetchGameMapLoader("http://localhost:3000/maps");
-  return mapLoader;
-}
+const landTilesCache = new Map<GameMapType, number>();
 
-// Gets the number of land tiles for a map
-// FetchGameMapLoader already caches maps, so no need for additional caching here.
+// Gets the number of land tiles for a map.
 export async function getMapLandTiles(map: GameMapType): Promise<number> {
+  const cached = landTilesCache.get(map);
+  if (cached !== undefined) return cached;
+
   try {
-    const loader = getMapLoader();
-    const mapData = loader.getMapData(map);
-    const manifest = await mapData.manifest();
-    return manifest.map.num_land_tiles;
+    const raw = (await readMapFile(map, "manifest.json")).toString("utf8");
+    const tiles = (JSON.parse(raw) as { map: { num_land_tiles: number } }).map
+      .num_land_tiles;
+    landTilesCache.set(map, tiles);
+    return tiles;
   } catch (error) {
     log.error(`Failed to load manifest for ${map}: ${error}`, { map });
     return 1_000_000; // Default fallback

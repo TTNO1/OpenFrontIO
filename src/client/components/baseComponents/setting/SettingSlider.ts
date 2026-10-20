@@ -1,4 +1,4 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, type PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 
 @customElement("setting-slider")
@@ -8,7 +8,12 @@ export class SettingSlider extends LitElement {
   @property({ type: Number }) value = 0;
   @property({ type: Number }) min = 0;
   @property({ type: Number }) max = 100;
+  // Graphics options tune fractional values (opacities, scale factors), which
+  // a whole-number slider cannot express.
+  @property({ type: Number }) step = 1;
   @property({ type: Boolean }) easter = false;
+  @property() unit = "%";
+  @property({ attribute: false }) formatValue?: (value: number) => string;
 
   createRenderRoot() {
     return this;
@@ -32,6 +37,21 @@ export class SettingSlider extends LitElement {
     const percent = ((this.value - this.min) / (this.max - this.min)) * 100;
     const clamped = Math.max(0, Math.min(100, percent));
     slider.style.setProperty("--fill", `${clamped}%`);
+  }
+
+  /**
+   * The filled part of the track is a CSS custom property, which `handleInput`
+   * sets during a drag. Setting `.value` from outside — "Reset to defaults",
+   * or reopening the tab — moves the thumb but left the fill where it was.
+   */
+  protected updated(changed: PropertyValues) {
+    if (!changed.has("value") && !changed.has("min") && !changed.has("max")) {
+      return;
+    }
+    const slider = this.renderRoot.querySelector(
+      "input[type=range]",
+    ) as HTMLInputElement | null;
+    if (slider) this.updateSliderStyle(slider);
   }
 
   firstUpdated() {
@@ -65,18 +85,21 @@ export class SettingSlider extends LitElement {
           <div class="flex items-center gap-2 w-full">
             <span
               class="text-white font-bold text-sm shrink-0 text-right min-w-[3ch]"
-              >${this.value}%</span
+              >${this.formatValue
+                ? this.formatValue(this.value)
+                : `${this.value}${this.unit}`}</span
             >
             <input
               type="range"
               class="flex-1 w-auto appearance-none h-2 bg-transparent rounded outline-none 
-              [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded [&::-webkit-slider-runnable-track]:bg-[image:linear-gradient(to_right,#3b82f6_0%,#3b82f6_var(--fill),rgba(255,255,255,0.1)_var(--fill),rgba(255,255,255,0.1)_100%)]
-              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:shadow-[0_0_0_4px_rgba(59,130,246,0.2)] [&::-webkit-slider-thumb]:transition-all active:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:shadow-[0_0_0_6px_rgba(59,130,246,0.3)]
+              [&::-webkit-slider-runnable-track]:h-2 [&::-webkit-slider-runnable-track]:rounded [&::-webkit-slider-runnable-track]:bg-[image:linear-gradient(to_right,var(--color-malibu-blue)_0%,var(--color-malibu-blue)_var(--fill),rgba(255,255,255,0.1)_var(--fill),rgba(255,255,255,0.1)_100%)]
+              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-[18px] [&::-webkit-slider-thumb]:w-[18px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-malibu-blue [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:-mt-[6px] [&::-webkit-slider-thumb]:shadow-[var(--shadow-malibu-blue-ring-sm)] [&::-webkit-slider-thumb]:transition-all active:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:shadow-[var(--shadow-malibu-blue-ring-lg)]
               [&::-moz-range-track]:h-2 [&::-moz-range-track]:rounded [&::-moz-range-track]:bg-white/10
-              [&::-moz-range-progress]:h-2 [&::-moz-range-progress]:rounded [&::-moz-range-progress]:bg-blue-500
-              [&::-moz-range-thumb]:h-[18px] [&::-moz-range-thumb]:w-[18px] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-[0_0_0_4px_rgba(59,130,246,0.2)] [&::-moz-range-thumb]:transition-all active:[&::-moz-range-thumb]:scale-110 active:[&::-moz-range-thumb]:shadow-[0_0_0_6px_rgba(59,130,246,0.3)]"
+              [&::-moz-range-progress]:h-2 [&::-moz-range-progress]:rounded [&::-moz-range-progress]:bg-malibu-blue
+              [&::-moz-range-thumb]:h-[18px] [&::-moz-range-thumb]:w-[18px] [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-malibu-blue [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:shadow-[var(--shadow-malibu-blue-ring-sm)] [&::-moz-range-thumb]:transition-all active:[&::-moz-range-thumb]:scale-110 active:[&::-moz-range-thumb]:shadow-[var(--shadow-malibu-blue-ring-lg)]"
               min=${this.min}
               max=${this.max}
+              step=${this.step}
               .value=${String(this.value)}
               @input=${this.handleInput}
             />

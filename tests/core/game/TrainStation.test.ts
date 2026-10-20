@@ -1,26 +1,23 @@
-import { GameUpdateType } from "src/core/game/GameUpdates";
-import { vi, type Mocked } from "vitest";
-import { DefaultConfig } from "../../../src/core/configuration/DefaultConfig";
-import { TrainExecution } from "../../../src/core/execution/TrainExecution";
 import {
   Difficulty,
-  Game,
   GameMapSize,
   GameMapType,
   GameMode,
   GameType,
-  Player,
-  Unit,
   UnitType,
-} from "../../../src/core/game/Game";
-import { Cluster, TrainStation } from "../../../src/core/game/TrainStation";
-import { UserSettings } from "../../../src/core/game/UserSettings";
-import { GameConfig } from "../../../src/core/Schemas";
-import { TestServerConfig } from "../../util/TestServerConfig";
+} from "@openfront/engine-api/game/GameTypes";
+import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
+import { GameConfig } from "@openfront/engine-api/Schemas";
+import { EngineConfig } from "@openfront/engine/configuration/EngineConfig";
+import { TrainExecution } from "@openfront/engine/execution/TrainExecution";
+import { Game, Player, Unit } from "@openfront/engine/game/Game";
+import { Cluster, TrainStation } from "@openfront/engine/game/TrainStation";
+import { vi, type Mocked } from "vitest";
 
-vi.mock("../../../src/core/game/Game");
-vi.mock("../../../src/core/execution/TrainExecution");
-vi.mock("../../../src/core/PseudoRandom");
+vi.mock("@openfront/engine/game/Game");
+vi.mock("@openfront/engine-api/game/GameTypes");
+vi.mock("@openfront/engine/execution/TrainExecution");
+vi.mock("@openfront/engine-lib/PseudoRandom");
 
 describe("TrainStation", () => {
   let game: Mocked<Game>;
@@ -50,6 +47,7 @@ describe("TrainStation", () => {
 
     player = {
       addGold: vi.fn(),
+      addTrainGold: vi.fn(),
       id: 1,
       canTrade: vi.fn().mockReturnValue(true),
       isAlliedWith: vi.fn().mockReturnValue(false),
@@ -99,6 +97,7 @@ describe("TrainStation", () => {
   it("records external trade on the station owner", () => {
     const stationOwner = {
       addGold: vi.fn(),
+      addTrainGold: vi.fn(),
       id: 1,
       canTrade: vi.fn().mockReturnValue(true),
       isAlliedWith: vi.fn().mockReturnValue(false),
@@ -106,6 +105,7 @@ describe("TrainStation", () => {
     } as any;
     const trainOwner = {
       addGold: vi.fn(),
+      addTrainGold: vi.fn(),
       id: 2,
       canTrade: vi.fn().mockReturnValue(true),
       isAlliedWith: vi.fn().mockReturnValue(false),
@@ -121,6 +121,8 @@ describe("TrainStation", () => {
 
     expect(stationOwner.addGold).toHaveBeenCalledWith(500n, unit.tile());
     expect(trainOwner.addGold).toHaveBeenCalledWith(500n, unit.tile());
+    expect(stationOwner.addTrainGold).toHaveBeenCalledWith(500n);
+    expect(trainOwner.addTrainGold).toHaveBeenCalledWith(500n);
     expect(gameStats.trainExternalTrade).toHaveBeenCalledWith(
       stationOwner,
       500n,
@@ -206,12 +208,11 @@ describe("TrainStation", () => {
   });
 });
 
-describe("DefaultConfig.trainGold trade stop penalty", () => {
-  let config: DefaultConfig;
+describe("EngineConfig.trainGold trade stop penalty", () => {
+  let config: EngineConfig;
   let mockPlayer: Player;
 
   beforeEach(() => {
-    const serverConfig = new TestServerConfig();
     const gameConfig: GameConfig = {
       gameMap: GameMapType.Asia,
       gameMapSize: GameMapSize.Normal,
@@ -228,12 +229,7 @@ describe("DefaultConfig.trainGold trade stop penalty", () => {
       disableNavMesh: false,
       randomSpawn: false,
     };
-    config = new DefaultConfig(
-      serverConfig,
-      gameConfig,
-      new UserSettings(),
-      false,
-    );
+    config = new EngineConfig(gameConfig, false);
     mockPlayer = { isLobbyCreator: () => false } as unknown as Player;
   });
 

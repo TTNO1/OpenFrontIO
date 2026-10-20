@@ -1,18 +1,26 @@
+import { assetUrl } from "@openfront/shared/AssetUrls";
 import { html } from "lit";
 import { customElement, query, state } from "lit/decorators.js";
-import { translateText, TUTORIAL_VIDEO_URL } from "../client/Utils";
-import { assetUrl } from "../core/AssetUrls";
-import { UserSettings } from "../core/game/UserSettings";
+import {
+  DESKTOP_TUTORIAL_VIDEO_URL,
+  textDirection,
+  translateText,
+  TUTORIAL_VIDEO_URL,
+} from "../client/Utils";
 import { BaseModal } from "./components/BaseModal";
 import "./components/Difficulties";
 import { modalHeader } from "./components/ui/ModalHeader";
 import { Platform } from "./Platform";
 import { TroubleshootingModal } from "./TroubleshootingModal";
+import { UserSettings } from "./UserSettings";
 
 @customElement("help-modal")
 export class HelpModal extends BaseModal {
+  protected routerName = "help";
+
   @state() private keybinds: Record<string, string> = this.getKeybinds();
   @query("#tutorial-video-iframe") private videoIframe?: HTMLIFrameElement;
+  @query("#tutorial-video-player") private videoPlayer?: HTMLVideoElement;
 
   private getKeybinds(): Record<string, string> {
     return new UserSettings().keybinds(Platform.isMac);
@@ -51,34 +59,62 @@ export class HelpModal extends BaseModal {
 
   private renderKey(code: string) {
     const label = this.getKeyLabel(code);
+    // Key names stay left-to-right even inside RTL locales so the badges
+    // (and combos like "Shift + click") never scramble.
     return html`<span
+      dir="ltr"
       class="inline-block min-w-[32px] text-center px-2 py-1 rounded bg-[#2a2a2a] border-b-2 border-[#1a1a1a] text-white font-mono text-xs font-bold mx-0.5"
       >${label}</span
     >`;
   }
 
-  render() {
+  protected renderHeaderSlot() {
+    return modalHeader({
+      title: translateText("main.help"),
+      onBack: () => this.close(),
+      ariaLabel: translateText("common.back"),
+    });
+  }
+
+  protected renderBody() {
     const keybinds = this.keybinds;
 
-    const content = html`
-      <div class="${this.modalContainerClass}">
-        ${modalHeader({
-          title: translateText("main.help"),
-          onBack: () => this.close(),
-          ariaLabel: translateText("common.back"),
-        })}
+    return html`
+      <div
+        dir=${textDirection()}
+        class="prose prose-invert prose-sm max-w-none px-6 py-3
+          [&_a]:text-blue-400 [&_a:hover]:text-blue-300 transition-colors
+          [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:text-white [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2
+          [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-blue-200
+          [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-blue-100
+          [&_ul]:ps-5 [&_ul]:list-disc [&_ul]:space-y-1
+          [&_li]:text-gray-300 [&_li]:leading-relaxed
+          [&_p]:text-gray-300 [&_p]:mb-3 [&_strong]:text-white [&_strong]:font-bold
+          [&_p]:[unicode-bidi:plaintext] [&_li]:[unicode-bidi:plaintext]
+          [&_td:nth-child(2)]:[unicode-bidi:plaintext]
+          [&_td:nth-child(3)]:[unicode-bidi:plaintext]"
+      >
+          <!-- In-game tutorial: starts a default solo game with the guide on -->
+          <section
+            class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/5 rounded-xl border border-white/10 px-5 py-4 mb-8"
+          >
+            <div>
+              <h3 class="!mt-0 !mb-1">
+                ${translateText("help_modal.in_game_tutorial")}
+              </h3>
+              <p class="!mb-0 text-sm">
+                ${translateText("help_modal.in_game_tutorial_desc")}
+              </p>
+            </div>
+            <button
+              class="shrink-0 hover:bg-white/5 px-6 py-2 text-xs font-bold transition-all duration-200 rounded-lg uppercase tracking-widest bg-malibu-blue/20 text-aquarius border border-malibu-blue/30 shadow-[var(--shadow-malibu-blue)]"
+              @click=${() =>
+                document.dispatchEvent(new CustomEvent("start-tutorial"))}
+            >
+              ${translateText("help_modal.in_game_tutorial_start")}
+            </button>
+          </section>
 
-        <div
-          class="prose prose-invert prose-sm max-w-none overflow-y-auto px-6 py-3 mr-1
-            [&_a]:text-blue-400 [&_a:hover]:text-blue-300 transition-colors
-            [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:text-white [&_h1]:border-b [&_h1]:border-white/10 [&_h1]:pb-2
-            [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-6 [&_h2]:mb-3 [&_h2]:text-blue-200
-            [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-4 [&_h3]:mb-2 [&_h3]:text-blue-100
-            [&_ul]:pl-5 [&_ul]:list-disc [&_ul]:space-y-1
-            [&_li]:text-gray-300 [&_li]:leading-relaxed
-            [&_p]:text-gray-300 [&_p]:mb-3 [&_strong]:text-white [&_strong]:font-bold
-            scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
-        >
           <!-- Video Tutorial Section -->
           <div class="flex items-center gap-3 mb-3">
             <div class="text-blue-400">
@@ -108,15 +144,30 @@ export class HelpModal extends BaseModal {
             class="bg-white/5 rounded-xl border border-white/10 overflow-hidden mb-8"
           >
             <div class="relative w-full h-0 pb-[56.25%]">
-              <iframe
-                id="tutorial-video-iframe"
-                class="absolute top-0 left-0 w-full h-full"
-                src="${this.isModalOpen ? TUTORIAL_VIDEO_URL : ""}"
-                title="${translateText("help_modal.video_tutorial_title")}"
-                frameborder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowfullscreen
-              ></iframe>
+              ${
+                Platform.isElectron
+                  ? html`<video
+                      id="tutorial-video-player"
+                      class="absolute top-0 left-0 w-full h-full"
+                      src="${DESKTOP_TUTORIAL_VIDEO_URL}"
+                      title="${translateText(
+                        "help_modal.video_tutorial_title",
+                      )}"
+                      controls
+                      preload="metadata"
+                    ></video>`
+                  : html`<iframe
+                      id="tutorial-video-iframe"
+                      class="absolute top-0 left-0 w-full h-full"
+                      src="${this.isModalOpen ? TUTORIAL_VIDEO_URL : ""}"
+                      title="${translateText(
+                        "help_modal.video_tutorial_title",
+                      )}"
+                      frameborder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowfullscreen
+                    ></iframe>`
+              }
             </div>
           </section>
 
@@ -155,7 +206,7 @@ export class HelpModal extends BaseModal {
               </p>
               <button
                 id="troubleshooting-button"
-                class="hover:bg-white/5 px-6 py-2 text-xs font-bold transition-all duration-200 rounded-lg uppercase tracking-widest bg-blue-500/20 text-blue-400 border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                class="hover:bg-white/5 px-6 py-2 text-xs font-bold transition-all duration-200 rounded-lg uppercase tracking-widest bg-malibu-blue/20 text-aquarius border border-malibu-blue/30 shadow-[var(--shadow-malibu-blue)]"
                 data-page="page-troubleshooting"
                 @click="${this.openTroubleshooting}"
                 data-i18n="main.go_to_troubleshooting"
@@ -208,9 +259,9 @@ export class HelpModal extends BaseModal {
               <table class="w-full text-sm border-separate border-spacing-y-1">
                 <thead>
                   <tr
-                    class="text-white/40 text-xs uppercase tracking-wider text-left"
+                    class="text-white/40 text-xs uppercase tracking-wider text-start"
                   >
-                    <th class="pb-2 pl-4">
+                    <th class="pb-2 ps-4">
                       ${translateText("help_modal.table_key")}
                     </th>
                     <th class="pb-2">
@@ -220,7 +271,7 @@ export class HelpModal extends BaseModal {
                 </thead>
                 <tbody class="text-white/80">
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey("Escape")}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -228,7 +279,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey("Enter")}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -236,15 +287,15 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey(keybinds.toggleView)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
-                      ${translateText("help_modal.action_alt_view")}
+                      ${translateText("user_setting.toggle_view_desc")}
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey(keybinds.coordinateGrid)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -252,7 +303,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey(keybinds.swapDirection)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -260,7 +311,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
                         ${this.renderKey(keybinds.shiftKey)}
                         <span class="text-white/40 font-bold">+</span>
@@ -281,9 +332,9 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
-                        ${this.renderKey(keybinds.modifierKey)}
+                        ${this.renderKey(keybinds.buildMenuModifier)}
                         <span class="text-white/40 font-bold">+</span>
                         <div
                           class="w-5 h-8 border border-white/40 rounded-full relative"
@@ -302,9 +353,9 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
-                        ${this.renderKey(keybinds.altKey)}
+                        ${this.renderKey(keybinds.emojiMenuModifier)}
                         <span class="text-white/40 font-bold">+</span>
                         <div
                           class="w-5 h-8 border border-white/40 rounded-full relative"
@@ -323,15 +374,31 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
-                      ${this.renderKey(keybinds.centerCamera)}
+                    <td class="py-3 ps-4 border-b border-white/5">
+                      ${this.renderKey(keybinds.quickChat)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
-                      ${translateText("help_modal.action_center")}
+                      ${translateText("help_modal.action_quick_chat")}
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
+                      ${this.renderKey(keybinds.emojiMenu)}
+                    </td>
+                    <td class="py-3 border-b border-white/5 text-white/70">
+                      ${translateText("help_modal.action_emote")}
+                    </td>
+                  </tr>
+                  <tr class="hover:bg-white/5 transition-colors">
+                    <td class="py-3 ps-4 border-b border-white/5">
+                      ${this.renderKey(keybinds.centerCamera)}
+                    </td>
+                    <td class="py-3 border-b border-white/5 text-white/70">
+                      ${translateText("user_setting.center_camera_desc")}
+                    </td>
+                  </tr>
+                  <tr class="hover:bg-white/5 transition-colors">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey(keybinds.pauseGame)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -339,7 +406,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="flex flex-wrap gap-2">
                         ${this.renderKey(keybinds.gameSpeedDown)}
                         ${this.renderKey(keybinds.gameSpeedUp)}
@@ -350,7 +417,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="flex flex-wrap gap-2">
                         ${this.renderKey(keybinds.zoomOut)}
                         ${this.renderKey(keybinds.zoomIn)}
@@ -361,7 +428,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="flex flex-wrap gap-1 max-w-[200px]">
                         ${this.renderKey(keybinds.moveUp)}
                         ${this.renderKey(keybinds.moveLeft)}
@@ -374,7 +441,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="flex flex-wrap gap-2">
                         ${this.renderKey(keybinds.attackRatioDown)}
                         ${this.renderKey(keybinds.attackRatioUp)}
@@ -385,7 +452,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
                         ${this.renderKey(keybinds.shiftKey)}
                         <span class="text-white/40 font-bold">+</span>
@@ -409,7 +476,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
                         ${this.renderKey(keybinds.altKey)}
                         <span class="text-white/40 font-bold">+</span>
@@ -421,7 +488,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div
                         class="w-5 h-8 border border-white/40 rounded-full relative"
                       >
@@ -435,9 +502,9 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       <div class="inline-flex items-center gap-2">
-                        ${this.renderKey(keybinds.shiftKey)}
+                        ${this.renderKey(keybinds.boxSelectWarships)}
                         <span class="text-white/40 font-bold">+</span>
                         <span class="text-white/50 text-xs"
                           >${translateText("help_modal.drag")}</span
@@ -449,7 +516,7 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="hover:bg-white/5 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5">
+                    <td class="py-3 ps-4 border-b border-white/5">
                       ${this.renderKey(keybinds.selectAllWarships)}
                     </td>
                     <td class="py-3 border-b border-white/5 text-white/70">
@@ -535,7 +602,7 @@ export class HelpModal extends BaseModal {
                   <p class="mb-4 leading-relaxed">
                     ${translateText("help_modal.ui_control_desc")}
                   </p>
-                  <ul class="space-y-2 list-disc pl-4 text-white/60">
+                  <ul class="space-y-2 list-disc ps-4 text-white/60">
                     <li>${translateText("help_modal.ui_gold")}</li>
                     <li>${translateText("help_modal.ui_attack_ratio")}</li>
                   </ul>
@@ -570,7 +637,7 @@ export class HelpModal extends BaseModal {
                   <p class="mb-4 leading-relaxed">
                     ${translateText("help_modal.ui_events_desc")}
                   </p>
-                  <ul class="space-y-2 list-disc pl-4 text-white/60">
+                  <ul class="space-y-2 list-disc ps-4 text-white/60">
                     <li>${translateText("help_modal.ui_events_alliance")}</li>
                     <li>${translateText("help_modal.ui_events_attack")}</li>
                     <li>${translateText("help_modal.ui_events_quickchat")}</li>
@@ -598,7 +665,7 @@ export class HelpModal extends BaseModal {
                   <p class="mb-4 leading-relaxed">
                     ${translateText("help_modal.ui_options_desc")}
                   </p>
-                  <ul class="space-y-2 list-disc pl-4 text-white/60">
+                  <ul class="space-y-2 list-disc ps-4 text-white/60">
                     <li>${translateText("help_modal.option_timer")}</li>
                     <li>${translateText("help_modal.option_speed")}</li>
                     <li>${translateText("help_modal.option_pause")}</li>
@@ -824,7 +891,7 @@ export class HelpModal extends BaseModal {
                     </li>
                     <li class="flex items-center gap-3">
                       <img
-                        src=${assetUrl("images/StopIconWhite.png")}
+                        src=${assetUrl("images/StopIconWhite.svg")}
                         class="w-8 h-8 scale-75 origin-left"
                         loading="lazy"
                       />
@@ -923,17 +990,17 @@ export class HelpModal extends BaseModal {
                 <thead class="bg-white/10">
                   <tr>
                     <th
-                      class="py-3 pl-4 text-left text-xs font-bold uppercase tracking-wider text-blue-300 w-[20%]"
+                      class="py-3 ps-4 text-start text-xs font-bold uppercase tracking-wider text-blue-300 w-[20%]"
                     >
                       ${translateText("help_modal.build_name")}
                     </th>
                     <th
-                      class="py-3 text-left text-xs font-bold uppercase tracking-wider text-blue-300 w-[8%]"
+                      class="py-3 text-start text-xs font-bold uppercase tracking-wider text-blue-300 w-[8%]"
                     >
                       ${translateText("help_modal.build_icon")}
                     </th>
                     <th
-                      class="py-3 text-left text-xs font-bold uppercase tracking-wider text-blue-300"
+                      class="py-3 text-start text-xs font-bold uppercase tracking-wider text-blue-300"
                     >
                       ${translateText("help_modal.build_desc")}
                     </th>
@@ -941,8 +1008,8 @@ export class HelpModal extends BaseModal {
                 </thead>
                 <tbody class="text-white/80">
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_city")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.city")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -957,8 +1024,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_defense")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.defense_post")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -973,8 +1040,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_port")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.port")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -989,8 +1056,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_factory")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.factory")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1005,8 +1072,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_warship")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.warship")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1021,8 +1088,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_silo")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.missile_silo")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1037,8 +1104,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_sam")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.sam_launcher")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1053,8 +1120,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_atom")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.atom_bomb")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1069,8 +1136,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_hydrogen")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.hydrogen_bomb")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1085,8 +1152,8 @@ export class HelpModal extends BaseModal {
                     </td>
                   </tr>
                   <tr class="bg-white/5 hover:bg-white/10 transition-colors">
-                    <td class="py-3 pl-4 border-b border-white/5 font-medium">
-                      ${translateText("help_modal.build_mirv")}
+                    <td class="py-3 ps-4 border-b border-white/5 font-medium">
+                      ${translateText("unit_type.mirv")}
                     </td>
                     <td class="py-3 border-b border-white/5">
                       <img
@@ -1228,22 +1295,6 @@ export class HelpModal extends BaseModal {
         </div>
       </div>
     `;
-
-    if (this.inline) {
-      return content;
-    }
-
-    return html`
-      <o-modal
-        id="helpModal"
-        title="Instructions"
-        ?inline=${this.inline}
-        ?hideHeader=${true}
-        ?hideCloseButton=${true}
-      >
-        ${content}
-      </o-modal>
-    `;
   }
 
   openTroubleshooting() {
@@ -1273,5 +1324,8 @@ export class HelpModal extends BaseModal {
     if (this.videoIframe) {
       this.videoIframe.src = "";
     }
+    // The desktop <video> keeps its src -- the file is local, so unlike the
+    // YouTube iframe there is nothing to unload; pausing is enough.
+    this.videoPlayer?.pause();
   }
 }

@@ -1,6 +1,7 @@
-import { AllianceExtensionExecution } from "../src/core/execution/alliance/AllianceExtensionExecution";
-import { AllianceRequestExecution } from "../src/core/execution/alliance/AllianceRequestExecution";
-import { Game, MessageType, Player, PlayerType } from "../src/core/game/Game";
+import { MessageType, PlayerType } from "@openfront/engine-api/game/GameTypes";
+import { AllianceExtensionExecution } from "@openfront/engine/execution/alliance/AllianceExtensionExecution";
+import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
+import { Game, Player } from "@openfront/engine/game/Game";
 import { playerInfo, setup } from "./util/Setup";
 
 let game: Game;
@@ -12,11 +13,7 @@ describe("AllianceExtensionExecution", () => {
   beforeEach(async () => {
     game = await setup(
       "ocean_and_land",
-      {
-        infiniteGold: true,
-        instantBuild: true,
-        infiniteTroops: true,
-      },
+      { infiniteGold: true, instantBuild: true, infiniteTroops: true },
       [
         playerInfo("player1", PlayerType.Human),
         playerInfo("player2", PlayerType.Human),
@@ -27,10 +24,6 @@ describe("AllianceExtensionExecution", () => {
     player1 = game.player("player1");
     player2 = game.player("player2");
     player3 = game.player("player3");
-
-    while (game.inSpawnPhase()) {
-      game.executeNextTick();
-    }
   });
 
   test("Successfully extends existing alliance between Humans", () => {
@@ -142,6 +135,8 @@ describe("AllianceExtensionExecution", () => {
       player2.id(),
       undefined,
       { name: player1.displayName() },
+      undefined,
+      player1.id(),
     );
     expect(displayMessageSpy).toHaveBeenCalledTimes(1);
 

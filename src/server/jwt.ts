@@ -1,13 +1,15 @@
-import { jwtVerify } from "jose";
-import { z } from "zod";
 import {
   TokenPayload,
   TokenPayloadSchema,
   UserMeResponse,
   UserMeResponseSchema,
-} from "../core/ApiSchemas";
-import { GameEnv, ServerConfig } from "../core/configuration/Config";
-import { PersistentIdSchema } from "../core/Schemas";
+} from "@openfront/shared/ApiSchemas";
+import { CloseCode, CloseReason } from "@openfront/shared/CloseCodes";
+import { GameEnv } from "@openfront/shared/configuration/Env";
+import { PersistentIdSchema } from "@openfront/shared/WireSchemas";
+import { jwtVerify } from "jose";
+import { z } from "zod";
+import { ServerEnv } from "./ServerEnv";
 
 type TokenVerificationResult =
   | {
@@ -19,10 +21,9 @@ type TokenVerificationResult =
 
 export async function verifyClientToken(
   token: string,
-  config: ServerConfig,
 ): Promise<TokenVerificationResult> {
   if (PersistentIdSchema.safeParse(token).success) {
-    if (config.env() === GameEnv.Dev) {
+    if (ServerEnv.env() === GameEnv.Dev) {
       return { type: "success", persistentId: token, claims: null };
     } else {
       return {
@@ -32,9 +33,9 @@ export async function verifyClientToken(
     }
   }
   try {
-    const issuer = config.jwtIssuer();
-    const audience = config.jwtAudience();
-    const key = await config.jwkPublicKey();
+    const issuer = ServerEnv.jwtIssuer();
+    const audience = ServerEnv.jwtAudience();
+    const key = await ServerEnv.jwkPublicKey();
     const { payload } = await jwtVerify(token, key, {
       algorithms: ["EdDSA"],
       issuer,
@@ -62,24 +63,24 @@ export async function verifyClientToken(
   }
 }
 
+// status is the API's HTTP status; unset for network and parse failures.
+export type UserMeError = { type: "error"; status?: number; message: string };
+
 export async function getUserMe(
   token: string,
-  config: ServerConfig,
-): Promise<
-  | { type: "success"; response: UserMeResponse }
-  | { type: "error"; message: string }
-> {
+): Promise<{ type: "success"; response: UserMeResponse } | UserMeError> {
   try {
     // Get the user object
-    const response = await fetch(config.jwtIssuer() + "/users/@me", {
+    const response = await fetch(ServerEnv.jwtIssuer() + "/users/@me", {
       headers: {
         authorization: `Bearer ${token}`,
-        "x-api-key": config.apiKey(),
+        "x-api-key": ServerEnv.apiKey(),
       },
     });
     if (response.status !== 200) {
       return {
         type: "error",
+        status: response.status,
         message: `Failed to fetch user me: ${response.statusText}`,
       };
     }
@@ -98,4 +99,21 @@ export async function getUserMe(
       message: `Failed to fetch user me: ${e}`,
     };
   }
+}
+
+// How a join closes when /users/@me fails. A 401/403 is the API rejecting the
+// session itself: retrying with the same token cannot succeed, so close with a
+// terminal code and let the client send the player back to log in. Anything
+// else (5xx, network, bad body) may be transient and stays retryable.
+export function userMeFailureClose(error: UserMeError): {
+  code: CloseCode;
+  reason: CloseReason;
+} {
+  if (error.status === 401 || error.status === 403) {
+    return { code: CloseCode.Unauthorized, reason: CloseReason.InvalidToken };
+  }
+  return {
+    code: CloseCode.InternalError,
+    reason: CloseReason.AccountLookupFailed,
+  };
 }

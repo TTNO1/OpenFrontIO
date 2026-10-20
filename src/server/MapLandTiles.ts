@@ -1,6 +1,6 @@
-import { FetchGameMapLoader } from "src/core/game/FetchGameMapLoader";
-import { GameMapType } from "src/core/game/Game";
-import { GameMapLoader } from "src/core/game/GameMapLoader";
+import { FetchGameMapLoader } from "../core/game/FetchGameMapLoader";
+import { GameMapType } from "../core/game/Game";
+import { GameMapLoader } from "../core/game/GameMapLoader";
 import { logger } from "./Logger";
 
 let mapLoader: GameMapLoader | null = null;

@@ -53,7 +53,7 @@ export const Env = {
         import.meta.env &&
         import.meta.env.MODE
       ) {
-        return import.meta.env.MODE;
+        return String(import.meta.env.MODE);
       }
     } catch {
       // Ignore errors accessing import.meta

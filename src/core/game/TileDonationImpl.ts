@@ -1,23 +1,22 @@
-import { Player, TerraNullius, Tick, TileDonation } from "./Game";
+import { Player, Tick, TileDonation} from "./Game";
 import { GameImpl } from "./GameImpl";
 import { TileRef } from "./GameMap";
-import { Donation, PlayerImpl } from "./PlayerImpl";
+import { PlayerImpl } from "./PlayerImpl";
 
-export class TileDonationImpl extends Donation implements TileDonation {
+export class TileDonationImpl implements TileDonation {
   private _isActive = true;
   private _borderSize = 0;
 
   constructor(
     private _id: string,
-    public readonly recipient: Player,
-    public readonly tick: Tick,
-    public readonly sender: Player,
+    private _recipient: Player,
+    private _sender: Player,
+    private _tick: Tick,
     private _tiles: number,
     private _border: Set<number>,
+    private _relationChange: number | null,
     private _mg: GameImpl,
-  ) {
-    super(recipient, tick);
-  }
+  ) {}
 
   tiles(): number {
     return this._tiles;
@@ -33,16 +32,48 @@ export class TileDonationImpl extends Donation implements TileDonation {
   id() {
     return this._id;
   }
+  
+  sender() {
+    return this._sender;
+  }
+  
+  recipient() {
+    return this._recipient;
+  }
+  
+  tick() {
+    return this._tick;
+  }
+  
+  amount() {
+    return this.tiles();
+  }
+  
+  type(): "tiles" {
+    return "tiles";
+  }
+  
+  relationChange() {
+    return this._relationChange;
+  }
+  
+  setRelationChange(value: number) {
+    this._relationChange = value;
+  }
+  
+  addRelationChange(value: number) {
+    this._relationChange = (this._relationChange ?? 0) + value;
+  }
 
   delete() {
-    if (this.recipient.isPlayer()) {
-      (this.recipient as PlayerImpl)._incomingTileDonations = (
-        this.recipient as PlayerImpl
+    if (this._recipient.isPlayer()) {
+      (this._recipient as PlayerImpl)._incomingTileDonations = (
+        this._recipient as PlayerImpl
       )._incomingTileDonations.filter((td) => td !== this);
     }
 
-    (this.sender as PlayerImpl)._outgoingTileDonations = (
-      this.sender as PlayerImpl
+    (this._sender as PlayerImpl)._outgoingTileDonations = (
+      this._sender as PlayerImpl
     )._outgoingTileDonations.filter((td) => td !== this);
 
     this._isActive = false;

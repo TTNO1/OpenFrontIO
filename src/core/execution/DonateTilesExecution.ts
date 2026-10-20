@@ -79,7 +79,7 @@ export class DonateTilesExecution implements Execution {
 		this.refreshToDonate();
 
 		for (const incoming of this.sender.incomingTileDonations()) {
-			if (incoming.sender === this.recipient) {
+			if (incoming.sender() === this.recipient) {
 				// Recipient has opposing donation, cancel them out
 				if (incoming.tiles() > this.tileDonation.tiles()) {
 					incoming.setTiles(incoming.tiles() - this.tileDonation.tiles());
@@ -96,7 +96,7 @@ export class DonateTilesExecution implements Execution {
 		for (const outgoing of this.sender.outgoingTileDonations()) {
 			if (
 				outgoing !== this.tileDonation &&
-				outgoing.recipient === this.tileDonation.recipient
+				outgoing.recipient() === this.tileDonation.recipient()
 			) {
 				this.tileDonation.setTiles(this.tileDonation.tiles() + outgoing.tiles());
 				outgoing.delete();
@@ -195,7 +195,7 @@ export class DonateTilesExecution implements Execution {
 		}
 		
 		const relationUpdate = this.relationPerPortionOfTiles * (((this.tiles as number) - this.tileDonation.tiles()) / this.totalWeightedTiles);
-		
+		this.tileDonation.setRelationChange(relationUpdate);
 		this.recipient.updateRelation(this.sender, relationUpdate);
 
 		// Only AI nations auto-respond with emojis, human players should not

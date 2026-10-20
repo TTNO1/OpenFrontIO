@@ -25,7 +25,7 @@ export class DevServerConfig extends DefaultServerConfig {
   }
 
   gameCreationRate(): number {
-    return 500 * 1000;
+    return 50 * 1000;
   }
 
   numWorkers(): number {

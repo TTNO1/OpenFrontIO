@@ -151,36 +151,45 @@ export class AttackExecution implements Execution {
       const difficulty = this.mg.config().gameConfig().difficulty;
       let targetRelationChange: number;
       let enemyOfMyEnemyRelationChange: number;
-      let minTroopsFractionForEOERelationUpdate;
+      let minTroopsFractionForEOERelationUpdate: number;
+      let attackCooldown: number;//Cooldown ticks from attacking a player before they will receive a relation bump for assist
+      let recentAttackWindow: number;//Give relation bump to players target has attacked in past this many ticks
+      let assistCooldown: number = 250;//Min ticks between relation bump
       switch (difficulty) {
         case Difficulty.Easy:
           targetRelationChange = -60;
           enemyOfMyEnemyRelationChange = 60;
           minTroopsFractionForEOERelationUpdate = 0.03;
+          attackCooldown = 6000;
+          recentAttackWindow = 600;
           break;
         case Difficulty.Medium:
           targetRelationChange = -70;
           enemyOfMyEnemyRelationChange = 50;
           minTroopsFractionForEOERelationUpdate = 0.07;
+          attackCooldown = 1500;
+          recentAttackWindow = 400;
           break;
         case Difficulty.Hard:
           targetRelationChange = -80;
           enemyOfMyEnemyRelationChange = 30;
           minTroopsFractionForEOERelationUpdate = 0.1;
+          attackCooldown = 2400;
+          recentAttackWindow = 300;
           break;
         case Difficulty.Impossible:
           targetRelationChange = -100;
           enemyOfMyEnemyRelationChange = 15;
           minTroopsFractionForEOERelationUpdate = 0.17;
+          attackCooldown = 4000;
+          recentAttackWindow = 250;
           break;
         default:
           assertNever(difficulty);
       }
       this.target.updateRelation(this._owner, targetRelationChange);
       
-      const attackCooldown = 600;
-      if(mg.ticks() - this._owner.getLastOutgoingAttackTick(this.target) > attackCooldown) {
-        const recentAttackWindow = 100;
+      if(mg.ticks() - this._owner.getLastOutgoingAttackTick(this.target) > assistCooldown) {
         const targetTargets = this.target.getRecentAttackTargets(recentAttackWindow);
         const ownerTargets = this._owner.getRecentAttackTargets(attackCooldown);
         const enemiesOfMyEnemy = targetTargets.filter(target => target.isPlayer() && !ownerTargets.includes(target));

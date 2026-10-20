@@ -508,11 +508,20 @@ export interface Attack {
   clusteredPositions(): TileRef[];
 }
 
-export interface TileDonation {
+export interface Donation {
+	recipient(): Player;
+  sender(): Player;
+  tick(): Tick;
+  type(): "troops" | "gold" | "tiles";
+  amount(): number;
+  relationChange(): number | null;
+  setRelationChange(value: number): void;
+  addRelationChange(value: number): void;
+}
+
+export interface TileDonation extends Donation {
   id(): string;
   cancel(): void;
-  readonly recipient: Player;
-  readonly sender: Player;
   tiles(): number;
   setTiles(tiles: number): void;
   isActive(): boolean;
@@ -521,6 +530,7 @@ export interface TileDonation {
   removeBorderTile(tile: TileRef): void;
   clearBorder(): void;
   borderSize(): number;
+  type(): "tiles";
 }
 
 export interface AllianceRequest {

@@ -1,4 +1,4 @@
-import cluster from "cluster";
+import cluster from "node:cluster";
 import * as dotenv from "dotenv";
 import { startMaster } from "./Master";
 import { startWorker } from "./Worker";

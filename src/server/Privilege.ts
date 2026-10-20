@@ -8,7 +8,7 @@ import {
   resolveLeetSpeakTransformer,
   toAsciiLowerCaseTransformer,
 } from "obscenity";
-import countries from "resources/countries.json";
+import countries from "../../resources/countries.json";
 
 import { Cosmetics } from "../core/CosmeticSchemas";
 import { decodePatternData } from "../core/PatternDecoder";

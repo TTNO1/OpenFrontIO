@@ -10,6 +10,7 @@ import {
   within,
 } from "../Util";
 import { AttackImpl } from "./AttackImpl";
+import { DonationImpl } from "./DonationImpl";
 import {
 	Alliance,
 	AllianceInfo,
@@ -19,6 +20,7 @@ import {
 	BuildableUnit,
 	Cell,
 	ColoredTeams,
+	Donation,
 	Embargo,
 	EmojiMessage,
 	GameMode,
@@ -62,13 +64,6 @@ import { UnitImpl } from "./UnitImpl";
 interface Target {
 	tick: Tick;
 	target: Player;
-}
-
-export class Donation {
-	constructor(
-		public readonly recipient: Player,
-		public readonly tick: Tick,
-	) {}
 }
 
 export class PlayerImpl implements Player {
@@ -896,9 +891,9 @@ export class PlayerImpl implements Player {
 			return false;
 		}
 		for (const donation of this.sentDonations) {
-			if (donation.recipient === recipient) {
+			if (donation.recipient() === recipient) {
 				if (
-					this.mg.ticks() - donation.tick <
+					this.mg.ticks() - donation.tick() <
 					this.mg.config().donateCooldown()
 				) {
 					return false;
@@ -923,9 +918,9 @@ export class PlayerImpl implements Player {
 			return false;
 		}
 		for (const donation of this.sentDonations) {
-			if (donation.recipient === recipient) {
+			if (donation.recipient() === recipient) {
 				if (
-					this.mg.ticks() - donation.tick <
+					this.mg.ticks() - donation.tick() <
 					this.mg.config().donateCooldown()
 				) {
 					return false;
@@ -949,8 +944,8 @@ export class PlayerImpl implements Player {
 			return false;
 		}
 		
-		if(this.sentDonations.find(d => d.recipient === recipient
-			&& this.mg.ticks() - d.tick < this.mg.config().donateCooldown())) {
+		if(this.sentDonations.find(d => d.recipient() === recipient
+			&& this.mg.ticks() - d.tick() < this.mg.config().donateCooldown())) {
 			return false;
 		}
 		return this.sharesBorderWith(recipient);
@@ -962,7 +957,7 @@ export class PlayerImpl implements Player {
 		if (removed === 0) return false;
 		recipient.addTroops(removed);
 
-		this.sentDonations.push(new Donation(recipient, this.mg.ticks()));
+		this.sentDonations.push(new DonationImpl(recipient, this, this.mg.ticks(), troops, "troops", null));
 		this.mg.displayMessage(
 			"events_display.sent_troops_to_player",
 			MessageType.SENT_TROOPS_TO_PLAYER,
@@ -986,7 +981,7 @@ export class PlayerImpl implements Player {
 		if (removed === 0n) return false;
 		recipient.addGold(removed);
 
-		this.sentDonations.push(new Donation(recipient, this.mg.ticks()));
+		this.sentDonations.push(new DonationImpl(recipient, this, this.mg.ticks(), Number(gold), "gold", null));
 		this.mg.displayMessage(
 			"events_display.sent_gold_to_player",
 			MessageType.SENT_GOLD_TO_PLAYER,
@@ -1705,10 +1700,11 @@ export class PlayerImpl implements Player {
 		const tileDonation = new TileDonationImpl(
 			this._pseudo_random.nextID(),
 			recipient,
-			this.mg.ticks(),
 			this,
+			this.mg.ticks(),
 			tiles,
 			border,
+			null,
 			this.mg,
 		);
 		this._outgoingTileDonations.push(tileDonation);

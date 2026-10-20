@@ -142,6 +142,9 @@ export class GameServer {
     if (gameConfig.donateTroops !== undefined) {
       this.gameConfig.donateTroops = gameConfig.donateTroops;
     }
+    if (gameConfig.donateTiles !== undefined) {
+      this.gameConfig.donateTiles = gameConfig.donateTiles;
+    }
     if (gameConfig.maxTimerValue !== undefined) {
       this.gameConfig.maxTimerValue = gameConfig.maxTimerValue ?? undefined;
     }

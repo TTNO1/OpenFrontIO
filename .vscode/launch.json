@@ -10,7 +10,7 @@
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen"
     },
-    {
+    /*{
       "type": "node",
       "request": "launch",
       "name": "Debug Server",
@@ -18,14 +18,34 @@
       "runtimeArgs": [
         "--loader",
         "ts-node/esm",
+        "--import=specifier-resolution-node/register",
         "--experimental-specifier-resolution=node",
         "${workspaceFolder}/src/server/Server.ts"
       ],
+      "env": {
+        "GAME_ENV": "dev",
+        "KNOWN_EXTS": "ts,js,cjs,mjs,json,node,wasm"
+      },
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "sourceMaps": true,
+      "restart": true
+    }*/
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Server",
+      "runtimeExecutable": "tsx",
+      "program": "${workspaceFolder}/src/server/Server.ts",
       "env": {
         "GAME_ENV": "dev"
       },
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**"
+      ],
       "sourceMaps": true,
       "restart": true
     }

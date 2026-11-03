@@ -1,11 +1,16 @@
+import {
+  formatPlayerDisplayName,
+  GameMode,
+  maps,
+} from "@openfront/engine-api/game/GameTypes";
+import { ClanTagSchema, UsernameSchema } from "@openfront/engine-api/Schemas";
+import { buildAssetUrl } from "@openfront/shared/AssetPaths";
+import { GameInfo } from "@openfront/shared/WireSchemas";
 import { z } from "zod";
-import { buildAssetUrl } from "../core/AssetUrls";
-import { ClanTagSchema, GameInfo, UsernameSchema } from "../core/Schemas";
-import { formatPlayerDisplayName } from "../core/Util";
-import { GameMode } from "../core/game/Game";
 import { getRuntimeAssetManifest } from "./RuntimeAssetManifest";
+import { ServerEnv } from "./ServerEnv";
 
-export const PlayerInfoSchema = z.object({
+const PlayerInfoSchema = z.object({
   clientID: z.string().optional(),
   username: UsernameSchema.optional(),
   clanTag: ClanTagSchema,
@@ -141,8 +146,9 @@ export async function buildPreview(
   publicInfo: ExternalGameInfo | null,
 ): Promise<PreviewMeta> {
   const assetManifest = await getRuntimeAssetManifest();
+  const cdnBase = ServerEnv.cdnBase();
   const buildAbsoluteAssetUrl = (path: string) =>
-    new URL(buildAssetUrl(path, assetManifest), origin).toString();
+    new URL(buildAssetUrl(path, assetManifest, cdnBase), origin).toString();
   const isFinished = !!publicInfo?.info?.end;
   const isPrivate = lobby?.gameConfig?.gameType === "Private";
 
@@ -157,7 +163,8 @@ export async function buildPreview(
     activePlayers = countActivePlayers(players);
   } else {
     activePlayers =
-      countActivePlayers(players) || (lobby?.clients?.length ?? 0);
+      countActivePlayers(players) ||
+      (lobby?.clients?.filter((c) => !c.spectator).length ?? 0);
   }
   const map = lobby?.gameConfig?.gameMap ?? config.gameMap;
   let mode = lobby?.gameConfig?.gameMode ?? config.gameMode ?? GameMode.FFA;
@@ -189,8 +196,12 @@ export async function buildPreview(
   const winner = parseWinner(publicInfo?.info?.winner, players);
   const duration = publicInfo?.info?.duration;
 
-  // Normalize map name to match filesystem (lowercase, no spaces or special chars)
-  const normalizedMap = map ? map.toLowerCase().replace(/[\s.()]+/g, "") : null;
+  // Asset dirs are the map id lowercased; display names usually normalize to
+  // the same string, but not always (e.g. "Tourney 2 Teams" → maps/tourney1/).
+  const mapId = map ? (maps.find((m) => m.type === map)?.id ?? map) : null;
+  const normalizedMap = mapId
+    ? mapId.toLowerCase().replace(/[\s.()]+/g, "")
+    : null;
 
   const mapThumbnail = normalizedMap
     ? buildAbsoluteAssetUrl(
@@ -209,7 +220,7 @@ export async function buildPreview(
       ? `${mode} on ${map}${gameTypeLabel}`
       : "OpenFront Game";
 
-  let description = "";
+  let description: string;
   if (isFinished) {
     const parts: string[] = [];
     if (winner) {

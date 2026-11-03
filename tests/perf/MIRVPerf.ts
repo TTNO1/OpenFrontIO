@@ -1,8 +1,12 @@
+import {
+  PlayerInfo,
+  PlayerType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
+import { MirvExecution } from "@openfront/engine/execution/MIRVExecution";
 import Benchmark from "benchmark";
 import { dirname } from "path";
 import { fileURLToPath } from "url";
-import { MirvExecution } from "../../src/core/execution/MIRVExecution";
-import { PlayerInfo, PlayerType, UnitType } from "../../src/core/game/Game";
 import { setup } from "../util/Setup";
 
 // Setup sparse territory scenario (small target area)
@@ -15,10 +19,6 @@ const sparseTerritoryGame = await setup(
   [new PlayerInfo("player", PlayerType.Human, "client_id1", "player_id")],
   dirname(fileURLToPath(import.meta.url)),
 );
-
-while (sparseTerritoryGame.inSpawnPhase()) {
-  sparseTerritoryGame.executeNextTick();
-}
 
 const sparsePlayer = sparseTerritoryGame.player("player_id");
 
@@ -56,10 +56,6 @@ const denseTerritoryGame = await setup(
   dirname(fileURLToPath(import.meta.url)),
 );
 
-while (denseTerritoryGame.inSpawnPhase()) {
-  denseTerritoryGame.executeNextTick();
-}
-
 const densePlayer = denseTerritoryGame.player("player_id");
 
 for (let x = 0; x < 200; x++) {
@@ -84,10 +80,6 @@ const giantMapGame = await setup(
   dirname(fileURLToPath(import.meta.url)),
 );
 
-while (giantMapGame.inSpawnPhase()) {
-  giantMapGame.executeNextTick();
-}
-
 const giantMapPlayer = giantMapGame.player("player_id");
 
 // Conquer ALL available land tiles on the giant world map
@@ -110,6 +102,9 @@ const results: string[] = [];
 
 new Benchmark.Suite()
   .add("MIRV target selection - sparse territory", () => {
+    sparsePlayer.units(UnitType.MissileSilo).forEach((s) => {
+      while (s.isInCooldown()) s.reloadMissile();
+    });
     const targetTile = sparseTerritoryGame.ref(100, 100);
     const mirvExec = new MirvExecution(sparsePlayer, targetTile);
 
@@ -121,6 +116,9 @@ new Benchmark.Suite()
     }
   })
   .add("MIRV target selection - dense territory", () => {
+    densePlayer.units(UnitType.MissileSilo).forEach((s) => {
+      while (s.isInCooldown()) s.reloadMissile();
+    });
     const targetTile = denseTerritoryGame.ref(100, 100);
     const mirvExec = new MirvExecution(densePlayer, targetTile);
 
@@ -132,6 +130,9 @@ new Benchmark.Suite()
     }
   })
   .add("MIRV target selection - giant world map (350 targets)", () => {
+    giantMapPlayer.units(UnitType.MissileSilo).forEach((s) => {
+      while (s.isInCooldown()) s.reloadMissile();
+    });
     const targetTile = giantMapGame.ref(2150, 800);
     const mirvExec = new MirvExecution(giantMapPlayer, targetTile);
 

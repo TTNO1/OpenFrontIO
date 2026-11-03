@@ -1,4 +1,6 @@
 {
+  "categories": ["europe"],
+  "id": "Lisbon",
   "map": {
     "height": 1600,
     "num_land_tiles": 1495857,
@@ -6,12 +8,12 @@
   },
   "map16x": {
     "height": 400,
-    "num_land_tiles": 90194,
+    "num_land_tiles": 90186,
     "width": 400
   },
   "map4x": {
     "height": 800,
-    "num_land_tiles": 369383,
+    "num_land_tiles": 369114,
     "width": 800
   },
   "name": "Lisbon",
@@ -91,5 +93,7 @@
       "flag": "pt",
       "name": "Carvalhal"
     }
-  ]
+  ],
+  "themes": ["europe"],
+  "translation_key": "map.lisbon"
 }

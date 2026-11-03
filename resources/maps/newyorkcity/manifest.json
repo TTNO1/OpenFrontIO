@@ -1,4 +1,6 @@
 {
+  "categories": ["north_america"],
+  "id": "NewYorkCity",
   "map": {
     "height": 1900,
     "num_land_tiles": 1648646,
@@ -11,7 +13,7 @@
   },
   "map4x": {
     "height": 950,
-    "num_land_tiles": 406268,
+    "num_land_tiles": 406215,
     "width": 750
   },
   "name": "New York City",
@@ -105,5 +107,7 @@
       "flag": "gb-eng",
       "name": "Gravesend"
     }
-  ]
+  ],
+  "themes": ["north_america"],
+  "translation_key": "map.newyorkcity"
 }

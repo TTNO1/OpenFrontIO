@@ -1,4 +1,6 @@
 {
+  "categories": ["europe"],
+  "id": "FaroeIslands",
   "map": {
     "height": 2000,
     "num_land_tiles": 424994,
@@ -11,7 +13,7 @@
   },
   "map4x": {
     "height": 1000,
-    "num_land_tiles": 103147,
+    "num_land_tiles": 103090,
     "width": 800
   },
   "name": "Faroe Islands",
@@ -46,5 +48,7 @@
       "flag": "fo",
       "name": "Nordoyar Region"
     }
-  ]
+  ],
+  "themes": ["europe"],
+  "translation_key": "map.faroeislands"
 }

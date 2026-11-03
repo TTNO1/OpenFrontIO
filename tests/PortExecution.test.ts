@@ -1,11 +1,10 @@
-import { PortExecution } from "../src/core/execution/PortExecution";
 import {
-  Game,
-  Player,
   PlayerInfo,
   PlayerType,
   UnitType,
-} from "../src/core/game/Game";
+} from "@openfront/engine-api/game/GameTypes";
+import { PortExecution } from "@openfront/engine/execution/PortExecution";
+import { Game, Player } from "@openfront/engine/game/Game";
 import { setup } from "./util/Setup";
 
 let game: Game;
@@ -14,20 +13,10 @@ let other: Player;
 
 describe("PortExecution", () => {
   beforeEach(async () => {
-    game = await setup(
-      "half_land_half_ocean",
-      {
-        instantBuild: true,
-      },
-      [
-        new PlayerInfo("player", PlayerType.Human, null, "player_id"),
-        new PlayerInfo("other", PlayerType.Human, null, "other_id"),
-      ],
-    );
-
-    while (game.inSpawnPhase()) {
-      game.executeNextTick();
-    }
+    game = await setup("half_land_half_ocean", { instantBuild: true }, [
+      new PlayerInfo("player", PlayerType.Human, null, "player_id"),
+      new PlayerInfo("other", PlayerType.Human, null, "other_id"),
+    ]);
 
     player = game.player("player_id");
     player.addGold(BigInt(1000000));
@@ -103,5 +92,26 @@ describe("PortExecution", () => {
     const ports = execution.tradingPorts();
 
     expect(ports.length).toBe(1);
+  });
+
+  test("shouldSpawnTradeShip recomputes spawn rate per level with updated rejection count", () => {
+    player.conquer(game.ref(7, 10));
+    const port = player.buildUnit(UnitType.Port, game.ref(7, 10), {});
+    port.increaseLevel(); // level 2
+    const execution = new PortExecution(port);
+    execution.init(game, 0);
+
+    const rejections: number[] = [];
+    game.config().tradeShipSpawnRate = (r) => (rejections.push(r), 1000000);
+    expect(execution.shouldSpawnTradeShip()).toBe(false);
+    expect(rejections).toEqual([0, 1]);
+
+    game.config().tradeShipSpawnRate = (r) => (rejections.push(r), 1);
+    expect(execution.shouldSpawnTradeShip()).toBe(true);
+    expect(rejections).toEqual([0, 1, 2]);
+
+    game.config().tradeShipSpawnRate = (r) => (rejections.push(r), 1000000);
+    expect(execution.shouldSpawnTradeShip()).toBe(false);
+    expect(rejections).toEqual([0, 1, 2, 0, 1]);
   });
 });

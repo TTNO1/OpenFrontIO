@@ -1,5 +1,11 @@
 {
-  "name": "SanFrancisco",
+  "$schema": "../../../info.schema.json",
+  "id": "SanFrancisco",
+  "name": "San Francisco",
+  "translation_key": "map.sanfrancisco",
+  "categories": ["north_america"],
+  "location": { "lat": 37.8, "lon": -122.4 },
+  "author": "Tristar",
   "nations": [
     {
       "coordinates": [996, 990],
@@ -106,5 +112,6 @@
       "name": "Bodega Bay",
       "flag": "California"
     }
-  ]
+  ],
+  "themes": ["north_america"]
 }

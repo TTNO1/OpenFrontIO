@@ -1,5 +1,11 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "Australia",
   "name": "Australia",
+  "translation_key": "map.australia",
+  "categories": ["oceania"],
+  "location": { "lat": -25, "lon": 134 },
+  "author": "Duwibi",
   "nations": [
     {
       "coordinates": [460, 720],
@@ -36,5 +42,6 @@
       "name": "Tasmania",
       "flag": "aus_tas"
     }
-  ]
+  ],
+  "themes": ["oceania"]
 }

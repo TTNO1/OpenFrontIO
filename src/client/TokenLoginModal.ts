@@ -4,6 +4,7 @@ import { tempTokenLogin } from "./Auth";
 import { BaseModal } from "./components/BaseModal";
 import "./components/Difficulties";
 import { modalHeader } from "./components/ui/ModalHeader";
+import { showInGameAlert } from "./InGameModal";
 import { translateText } from "./Utils";
 
 @customElement("token-login")
@@ -11,6 +12,10 @@ export class TokenLoginModal extends BaseModal {
   private isAttemptingLogin = false;
 
   private retryInterval: NodeJS.Timeout | undefined = undefined;
+
+  private successTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  private loginGeneration = 0;
 
   private token: string | null = null;
 
@@ -22,40 +27,28 @@ export class TokenLoginModal extends BaseModal {
     super();
   }
 
-  render() {
-    const title = translateText("token_login_modal.title");
-    const content = html`
-      <div class="${this.modalContainerClass}">
-        ${modalHeader({
-          title,
-          onBack: () => this.close(),
-          ariaLabel: translateText("common.back"),
-        })}
-        <div class="flex-1 flex flex-col gap-4 p-6">
-          ${this.email ? this.loginSuccess(this.email) : this.loggingIn()}
-        </div>
-      </div>
-    `;
+  protected modalConfig() {
+    return { maxWidth: "620px" };
+  }
 
-    if (this.inline) {
-      return content;
-    }
+  protected renderHeaderSlot() {
+    return modalHeader({
+      title: translateText("token_login_modal.title"),
+      onBack: () => this.close(),
+      ariaLabel: translateText("common.back"),
+    });
+  }
 
+  protected renderBody() {
     return html`
-      <o-modal
-        id="token-login-modal"
-        title="${title}"
-        hideHeader
-        hideCloseButton
-        maxWidth="620px"
-      >
-        ${content}
-      </o-modal>
+      <div class="flex-1 flex flex-col gap-4 p-6">
+        ${this.email ? this.loginSuccess(this.email) : this.loggingIn()}
+      </div>
     `;
   }
 
   private loggingIn() {
-    const loggingText = translateText("token_login_modal.logging_in");
+    const loggingText = translateText("token_login_modal.title");
     return html`
       <div class="flex items-center gap-4">
         <div
@@ -89,38 +82,47 @@ export class TokenLoginModal extends BaseModal {
     `;
   }
 
-  public open(): void {
-    if (!this.token) {
-      return;
-    }
-    super.open();
-    clearInterval(this.retryInterval);
-    this.retryInterval = setInterval(() => this.tryLogin(), 3000);
-  }
-
   public openWithToken(token: string): void {
     this.token = token;
-    this.email = null;
-    this.attemptCount = 0;
-    this.isAttemptingLogin = false;
     this.open();
   }
 
-  public close() {
+  public open(args?: Record<string, unknown>): void {
+    if (!this.token) {
+      return;
+    }
+    super.open(args);
+  }
+
+  protected onOpen(): void {
+    this.loginGeneration++;
+    this.email = null;
+    this.attemptCount = 0;
+    this.isAttemptingLogin = false;
+    clearInterval(this.retryInterval);
+    clearTimeout(this.successTimeout);
+    this.requestUpdate();
+    this.retryInterval = setInterval(() => this.tryLogin(), 3000);
+    void this.tryLogin();
+  }
+
+  protected onClose(): void {
+    this.loginGeneration++;
     this.token = null;
     clearInterval(this.retryInterval);
+    clearTimeout(this.successTimeout);
     this.attemptCount = 0;
-    super.close();
     this.isAttemptingLogin = false;
   }
 
   private async tryLogin() {
+    const generation = this.loginGeneration;
     if (this.isAttemptingLogin) {
       return;
     }
     if (this.attemptCount > 3) {
       this.close();
-      alert("Login failed. Please try again later.");
+      void showInGameAlert(translateText("error_modal.login_failed"));
       return;
     }
     this.attemptCount++;
@@ -130,20 +132,43 @@ export class TokenLoginModal extends BaseModal {
       return;
     }
     try {
-      this.email = await tempTokenLogin(this.token);
-      if (!this.email) {
+      const result = await tempTokenLogin(this.token);
+      if (generation !== this.loginGeneration) {
         return;
       }
+      if (result.status === "retry") {
+        return;
+      }
+      if (result.status === "failed") {
+        // Permanent failures cannot succeed with another attempt.
+        clearInterval(this.retryInterval);
+        this.close();
+        const messageKey = {
+          consumed: "error_modal.login_token_consumed",
+          expired: "error_modal.login_token_expired",
+          invalid: "error_modal.login_token_invalid",
+        }[result.code];
+        void showInGameAlert(translateText(messageKey));
+        return;
+      }
+      this.email = result.email;
       clearInterval(this.retryInterval);
-      setTimeout(() => {
+      this.successTimeout = setTimeout(() => {
+        if (generation !== this.loginGeneration) {
+          return;
+        }
         this.close();
         window.location.reload();
       }, 1000);
       this.requestUpdate();
     } catch (e) {
-      console.error(e);
+      if (generation === this.loginGeneration) {
+        console.error(e);
+      }
     } finally {
-      this.isAttemptingLogin = false;
+      if (generation === this.loginGeneration) {
+        this.isAttemptingLogin = false;
+      }
     }
   }
 }

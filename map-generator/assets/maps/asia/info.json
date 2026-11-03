@@ -1,5 +1,12 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "Asia",
   "name": "Asia",
+  "translation_key": "map.asia",
+  "categories": ["featured", "continental", "asia"],
+  "location": { "lat": 48, "lon": 90 },
+  "author": "SunnyBoyWTF",
+  "featured_rank": 5,
   "nations": [
     {
       "coordinates": [165, 422],
@@ -126,5 +133,6 @@
       "name": "Ukraine",
       "flag": "ua"
     }
-  ]
+  ],
+  "themes": ["asia"]
 }

@@ -1,4 +1,6 @@
 {
+  "categories": ["africa"],
+  "id": "Conakry",
   "map": {
     "height": 1000,
     "num_land_tiles": 1108371,
@@ -11,7 +13,7 @@
   },
   "map4x": {
     "height": 500,
-    "num_land_tiles": 272631,
+    "num_land_tiles": 272605,
     "width": 1228
   },
   "name": "Conakry",
@@ -116,5 +118,24 @@
       "flag": "gn",
       "name": "Dioumaya"
     }
-  ]
+  ],
+  "special_team_count": 2,
+  "teamGameSpawnAreas": {
+    "2": [
+      {
+        "height": 1000,
+        "width": 1290,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "height": 1000,
+        "width": 1166,
+        "x": 1290,
+        "y": 0
+      }
+    ]
+  },
+  "themes": ["africa"],
+  "translation_key": "map.conakry"
 }

@@ -1,8 +1,7 @@
-import { html } from "lit";
+import { assetUrl } from "@openfront/shared/AssetUrls";
+import { html, TemplateResult } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { translateText } from "../client/Utils";
-import { assetUrl } from "../core/AssetUrls";
-import "./components/baseComponents/Modal";
 import { BaseModal } from "./components/BaseModal";
 import { modalHeader } from "./components/ui/ModalHeader";
 
@@ -15,6 +14,8 @@ interface LanguageOption {
 
 @customElement("language-modal")
 export class LanguageModal extends BaseModal {
+  protected routerName = "language";
+
   @property({ type: Array }) languageList: LanguageOption[] = [];
   @property({ type: String }) currentLang = "en";
 
@@ -29,65 +30,64 @@ export class LanguageModal extends BaseModal {
     this.close();
   };
 
-  render() {
-    const content = html`
-      <div
-        class="${this.modalContainerClass}"
-      >
-        <!-- Header -->
-        ${modalHeader({
-          title: translateText("select_lang.title"),
-          onBack: () => this.close(),
-          ariaLabel: translateText("common.back"),
-        })}
+  protected renderHeaderSlot() {
+    return modalHeader({
+      title: translateText("select_lang.title"),
+      onBack: () => this.close(),
+      ariaLabel: translateText("common.back"),
+    });
+  }
 
+  protected renderBody(): TemplateResult {
+    return html`
+      <div class="custom-scrollbar p-2">
         <div
-          class="flex-1 overflow-y-auto custom-scrollbar p-2"
+          class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
         >
-          <div
-            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
-          >
-            ${this.languageList.map((lang) => {
-              const isActive = this.currentLang === lang.code;
-              const isDebug = lang.code === "debug";
+          ${this.languageList.map((lang) => {
+            const isActive = this.currentLang === lang.code;
+            const isDebug = lang.code === "debug";
 
-              let buttonClasses =
-                "relative group rounded-xl border transition-all duration-200 flex items-center p-3 gap-3 w-full cursor-pointer";
+            let buttonClasses =
+              "relative group rounded-xl border transition-all duration-200 flex items-center p-3 gap-3 w-full cursor-pointer";
 
-              if (isDebug) {
-                buttonClasses +=
-                  " animate-pulse font-bold text-white border-2 border-dashed border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)] bg-gradient-to-r from-red-600 via-yellow-600 via-green-600 via-blue-600 to-purple-600";
-              } else if (isActive) {
-                buttonClasses += " bg-blue-500/20 border-blue-500/50";
-              } else {
-                buttonClasses +=
-                  " bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20";
-              }
+            if (isDebug) {
+              buttonClasses +=
+                " animate-pulse font-bold text-white border-2 border-dashed border-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)] bg-gradient-to-r from-red-600 via-yellow-600 via-green-600 via-blue-600 to-purple-600";
+            } else if (isActive) {
+              buttonClasses += " bg-malibu-blue/20 border-malibu-blue/50";
+            } else {
+              buttonClasses +=
+                " bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20";
+            }
 
-              return html`
-                <button
-                  class="${buttonClasses}"
-                  @click=${() => this.selectLanguage(lang.code)}
-                >
-                  <img
-                    src=${assetUrl(`flags/${lang.svg}.svg`)}
-                    class="w-8 h-6 object-contain rounded-sm shrink-0"
-                    alt="${lang.code}"
-                  />
-                  <div class="flex flex-col items-start min-w-0">
-                    <span
-                      class="text-sm font-bold uppercase tracking-wider whitespace-normal break-words w-full text-left ${isActive
+            return html`
+              <button
+                class="${buttonClasses}"
+                @click=${() => this.selectLanguage(lang.code)}
+              >
+                <img
+                  src=${assetUrl(`flags/${lang.svg}.svg`)}
+                  class="w-8 h-6 object-contain rounded-sm shrink-0"
+                  alt="${lang.code}"
+                />
+                <div class="flex flex-col items-start min-w-0">
+                  <span
+                    class="text-sm font-bold uppercase tracking-wider whitespace-normal break-words w-full text-left ${
+                      isActive
                         ? "text-white"
-                        : "text-gray-200 group-hover:text-white"}"
-                      >${lang.native}</span
-                    >
-                    <span
-                      class="text-xs text-white/40 uppercase tracking-widest group-hover:text-white/60 transition-colors whitespace-normal break-words w-full text-left"
-                      >${lang.en}</span
-                    >
-                  </div>
+                        : "text-gray-200 group-hover:text-white"
+                    }"
+                    >${lang.native}</span
+                  >
+                  <span
+                    class="text-xs text-white/40 uppercase tracking-widest group-hover:text-white/60 transition-colors whitespace-normal break-words w-full text-left"
+                    >${lang.en}</span
+                  >
+                </div>
 
-                  ${isActive
+                ${
+                  isActive
                     ? html`
                         <div class="ml-auto text-blue-400 shrink-0">
                           <svg
@@ -104,30 +104,13 @@ export class LanguageModal extends BaseModal {
                           </svg>
                         </div>
                       `
-                    : ""}
-                </button>
-              `;
-            })}
-            </div>
-          </div>
+                    : ""
+                }
+              </button>
+            `;
+          })}
         </div>
       </div>
-    `;
-
-    if (this.inline) {
-      return content;
-    }
-
-    return html`
-      <o-modal
-        title=${translateText("select_lang.title")}
-        ?inline=${this.inline}
-        .onClose=${this.close.bind(this)}
-        hideHeader
-        hideCloseButton
-      >
-        ${content}
-      </o-modal>
     `;
   }
 }

@@ -1,5 +1,11 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "Lisbon",
   "name": "Lisbon",
+  "translation_key": "map.lisbon",
+  "categories": ["europe"],
+  "location": { "lat": 38.7, "lon": -9.1 },
+  "author": "jachisc",
   "nations": [
     {
       "coordinates": [750, 630],
@@ -76,5 +82,6 @@
       "name": "Carvalhal",
       "flag": "pt"
     }
-  ]
+  ],
+  "themes": ["europe"]
 }

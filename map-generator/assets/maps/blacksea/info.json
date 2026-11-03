@@ -1,5 +1,11 @@
 {
-  "name": "BlackSea",
+  "$schema": "../../../info.schema.json",
+  "id": "BlackSea",
+  "name": "Black Sea",
+  "translation_key": "map.blacksea",
+  "categories": ["europe", "asia"],
+  "location": { "lat": 43, "lon": 35 },
+  "author": "evanpelle",
   "nations": [
     {
       "coordinates": [122, 647],
@@ -46,5 +52,6 @@
       "flag": "Circassia",
       "name": "Circassia"
     }
-  ]
+  ],
+  "themes": ["europe", "asia"]
 }

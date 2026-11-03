@@ -1,6 +1,7 @@
-import { AllianceRequestExecution } from "../src/core/execution/alliance/AllianceRequestExecution";
-import { DonateGoldExecution } from "../src/core/execution/DonateGoldExecution";
-import { Game, Player, PlayerType } from "../src/core/game/Game";
+import { PlayerType } from "@openfront/engine-api/game/GameTypes";
+import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
+import { DonateGoldExecution } from "@openfront/engine/execution/DonateGoldExecution";
+import { Game, Player } from "@openfront/engine/game/Game";
 import { playerInfo, setup } from "./util/Setup";
 
 let game: Game;
@@ -33,10 +34,6 @@ describe("Alliance Donation", () => {
     player2.conquer(game.ref(0, 1));
     player2.addGold(100n);
     player2.addTroops(100);
-
-    while (game.inSpawnPhase()) {
-      game.executeNextTick();
-    }
   });
 
   test("Can donate gold after alliance formed by reply", () => {

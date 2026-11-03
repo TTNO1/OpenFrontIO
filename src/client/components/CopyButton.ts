@@ -1,9 +1,9 @@
-import { LitElement, html } from "lit";
+import { LitElement, html, type TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { getRuntimeClientServerConfig } from "../../core/configuration/ConfigLoader";
-import { UserSettings } from "../../core/game/UserSettings";
-import { crazyGamesSDK } from "../CrazyGamesSDK";
-import { copyToClipboard, translateText } from "../Utils";
+import { ClientEnv } from "src/client/ClientEnv";
+import { gamePortal } from "../GamePortal";
+import { UserSettings } from "../UserSettings";
+import { copyToClipboard, showToast, translateText } from "../Utils";
 
 @customElement("copy-button")
 export class CopyButton extends LitElement {
@@ -13,13 +13,17 @@ export class CopyButton extends LitElement {
   includeLobbyQuery = false;
   @property({ type: String, attribute: "copy-text" }) copyText = "";
   @property({ type: String, attribute: "display-text" }) displayText = "";
+  // Rich label override (e.g. a username split into colored base and
+  // discriminator). Takes precedence over displayText when set; displayText
+  // should still be passed as the plain-text equivalent for the masked and
+  // "copied" states.
+  @property({ attribute: false }) displayContent: TemplateResult | null = null;
   @property({ type: Boolean, attribute: "show-visibility-toggle" })
   showVisibilityToggle = true;
   @property({ type: Boolean, attribute: "show-copy-icon" })
   showCopyIcon = true;
   @property({ type: Boolean }) compact = false;
 
-  @state() private copySuccess = false;
   @state() private lobbyIdVisible = true;
 
   private userSettings: UserSettings = new UserSettings();
@@ -34,10 +38,6 @@ export class CopyButton extends LitElement {
   ) {
     if (changedProperties.has("lobbyId")) {
       this.lobbyIdVisible = this.userSettings.lobbyIdVisibility();
-      this.copySuccess = false;
-    }
-    if (changedProperties.has("copyText")) {
-      this.copySuccess = false;
     }
     if (
       changedProperties.has("showVisibilityToggle") ||
@@ -63,8 +63,11 @@ export class CopyButton extends LitElement {
   }
 
   private async buildCopyUrl(): Promise<string> {
-    const config = await getRuntimeClientServerConfig();
-    let url = `${window.location.origin}/${config.workerPath(this.lobbyId)}/game/${this.lobbyId}`;
+    // ClientEnv.shareOrigin(), not window.location: this string goes to the
+    // clipboard and then to another player, and under the desktop shell the
+    // document's own origin is `app://openfront` — a link only that one
+    // Electron process can open. See deriveShareOrigin.
+    let url = `${ClientEnv.shareOrigin()}${ClientEnv.gamePath(this.lobbyId)}`;
     if (this.includeLobbyQuery) {
       url += `?lobby&s=${encodeURIComponent(this.lobbySuffix)}`;
     }
@@ -73,24 +76,26 @@ export class CopyButton extends LitElement {
 
   private async resolveCopyText(): Promise<string | null> {
     if (this.copyText) return this.copyText;
-    if (crazyGamesSDK.isOnCrazyGames()) {
-      return crazyGamesSDK.createInviteLink(this.lobbyId);
+    if (gamePortal.isOnGamePortal()) {
+      return gamePortal.createInviteLink(this.lobbyId);
     }
     if (!this.lobbyId) return "";
     return await this.buildCopyUrl();
   }
 
-  private async handleCopy() {
+  async handleCopy() {
     const text = await this.resolveCopyText();
     if (!text) {
-      alert("Error copying game id");
+      showToast(translateText("common.failed_copy"), "red");
       return;
     }
-    await copyToClipboard(
-      text,
-      () => (this.copySuccess = true),
-      () => (this.copySuccess = false),
-    );
+
+    try {
+      await copyToClipboard(text);
+      showToast(translateText("common.copied"), "green");
+    } catch {
+      showToast(translateText("common.failed_copy"), "red");
+    }
   }
 
   private canCopy() {
@@ -100,12 +105,10 @@ export class CopyButton extends LitElement {
   render() {
     const canCopy = this.canCopy();
     const allowMask = this.showVisibilityToggle && !this.compact;
-    const rawLabel = this.displayText || this.lobbyId || this.copyText;
-    const label = this.copySuccess
-      ? translateText("common.copied")
-      : allowMask && !this.lobbyIdVisible
-        ? this.maskLabel
-        : rawLabel;
+    const rawLabel =
+      this.displayContent ??
+      (this.displayText || this.lobbyId || this.copyText);
+    const label = allowMask && !this.lobbyIdVisible ? this.maskLabel : rawLabel;
     const disabledClass = canCopy ? "" : "opacity-60 cursor-not-allowed";
     const toggleDisabled = !this.lobbyId;
     const toggleClass = toggleDisabled ? "opacity-60 cursor-not-allowed" : "";
@@ -129,47 +132,51 @@ export class CopyButton extends LitElement {
       <div
         class="flex items-center gap-0.5 bg-white/5 rounded-lg px-2 py-1 border border-white/10 max-w-[220px] flex-nowrap"
       >
-        ${this.showVisibilityToggle
-          ? html`<button
-              @click=${this.toggleVisibility}
-              class="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white transition-colors ${toggleClass}"
-              title="${translateText("user_setting.toggle_visibility")}"
-              ?disabled=${toggleDisabled}
-              type="button"
-            >
-              ${this.lobbyIdVisible
-                ? html`<svg
-                    viewBox="0 0 512 512"
-                    height="16px"
-                    width="16px"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M256 105c-101.8 0-188.4 62.7-224 151 35.6 88.3 122.2 151 224 151s188.4-62.7 224-151c-35.6-88.3-122.2-151-224-151zm0 251.7c-56 0-101.7-45.7-101.7-101.7S200 153.3 256 153.3 357.7 199 357.7 255 312 356.7 256 356.7zm0-161.1c-33 0-59.4 26.4-59.4 59.4s26.4 59.4 59.4 59.4 59.4-26.4 59.4-59.4-26.4-59.4-59.4-59.4z"
-                    ></path>
-                  </svg>`
-                : html`<svg
-                    viewBox="0 0 512 512"
-                    height="16px"
-                    width="16px"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M448 256s-64-128-192-128S64 256 64 256c32 64 96 128 192 128s160-64 192-128z"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="32"
-                    ></path>
-                    <path
-                      d="M144 256l224 0"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="32"
-                      stroke-linecap="round"
-                    ></path>
-                  </svg>`}
-            </button>`
-          : ""}
+        ${
+          this.showVisibilityToggle
+            ? html`<button
+                @click=${this.toggleVisibility}
+                class="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white transition-colors ${toggleClass}"
+                title="${translateText("user_setting.toggle_visibility")}"
+                ?disabled=${toggleDisabled}
+                type="button"
+              >
+                ${
+                  this.lobbyIdVisible
+                    ? html`<svg
+                        viewBox="0 0 512 512"
+                        height="16px"
+                        width="16px"
+                        fill="currentColor"
+                      >
+                        <path
+                          d="M256 105c-101.8 0-188.4 62.7-224 151 35.6 88.3 122.2 151 224 151s188.4-62.7 224-151c-35.6-88.3-122.2-151-224-151zm0 251.7c-56 0-101.7-45.7-101.7-101.7S200 153.3 256 153.3 357.7 199 357.7 255 312 356.7 256 356.7zm0-161.1c-33 0-59.4 26.4-59.4 59.4s26.4 59.4 59.4 59.4 59.4-26.4 59.4-59.4-26.4-59.4-59.4-59.4z"
+                        ></path>
+                      </svg>`
+                    : html`<svg
+                        viewBox="0 0 512 512"
+                        height="16px"
+                        width="16px"
+                        fill="currentColor"
+                      >
+                        <path
+                          d="M448 256s-64-128-192-128S64 256 64 256c32 64 96 128 192 128s160-64 192-128z"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="32"
+                        ></path>
+                        <path
+                          d="M144 256l224 0"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="32"
+                          stroke-linecap="round"
+                        ></path>
+                      </svg>`
+                }
+              </button>`
+            : ""
+        }
         <button
           @click=${this.handleCopy}
           @dblclick=${this.enableSelectAll}
@@ -182,28 +189,30 @@ export class CopyButton extends LitElement {
         >
           ${label}
         </button>
-        ${this.showCopyIcon
-          ? html`<button
-              @click=${this.handleCopy}
-              class="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white transition-colors ${disabledClass}"
-              title="${translateText("common.click_to_copy")}"
-              aria-label="${translateText("common.click_to_copy")}"
-              ?disabled=${!canCopy}
-              type="button"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                height="16px"
-                width="16px"
-                fill="currentColor"
-                aria-hidden="true"
+        ${
+          this.showCopyIcon
+            ? html`<button
+                @click=${this.handleCopy}
+                class="p-1.5 rounded-md hover:bg-white/10 text-white/60 hover:text-white transition-colors ${disabledClass}"
+                title="${translateText("common.click_to_copy")}"
+                aria-label="${translateText("common.click_to_copy")}"
+                ?disabled=${!canCopy}
+                type="button"
               >
-                <path
-                  d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
-                />
-              </svg>
-            </button>`
-          : ""}
+                <svg
+                  viewBox="0 0 24 24"
+                  height="16px"
+                  width="16px"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M16 1H4c-1.1 0-2 .9-2 2v12h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"
+                  />
+                </svg>
+              </button>`
+            : ""
+        }
       </div>
     `;
   }

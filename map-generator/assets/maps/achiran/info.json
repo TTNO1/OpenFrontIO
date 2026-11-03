@@ -1,5 +1,10 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "Achiran",
   "name": "Achiran",
+  "translation_key": "map.achiran",
+  "categories": ["fictional", "europe"],
+  "author": "Duwibi",
   "nations": [
     {
       "coordinates": [785, 985],
@@ -21,5 +26,6 @@
       "flag": "ie",
       "name": "Achill"
     }
-  ]
+  ],
+  "themes": ["europe", "scary"]
 }

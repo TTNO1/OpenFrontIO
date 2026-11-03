@@ -1,4 +1,6 @@
 {
+  "categories": ["arcade"],
+  "id": "Didier",
   "map": {
     "height": 1348,
     "num_land_tiles": 1122321,
@@ -11,7 +13,7 @@
   },
   "map4x": {
     "height": 674,
-    "num_land_tiles": 278359,
+    "num_land_tiles": 278357,
     "width": 750
   },
   "name": "Didier",
@@ -64,5 +66,6 @@
       "coordinates": [622, 1220],
       "name": "Mell Confederation"
     }
-  ]
+  ],
+  "translation_key": "map.didier"
 }

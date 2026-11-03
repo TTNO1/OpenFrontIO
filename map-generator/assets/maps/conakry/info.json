@@ -1,5 +1,12 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "Conakry",
   "name": "Conakry",
+  "translation_key": "map.conakry",
+  "categories": ["africa"],
+  "location": { "lat": 9.6, "lon": -13.6 },
+  "author": "Patrick Plays Badly",
+  "special_team_count": 2,
   "nations": [
     {
       "coordinates": [510, 420],
@@ -101,5 +108,22 @@
       "name": "Dioumaya",
       "flag": "gn"
     }
-  ]
+  ],
+  "teamGameSpawnAreas": {
+    "2": [
+      {
+        "height": 1000,
+        "width": 1290,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "height": 1000,
+        "width": 1166,
+        "x": 1290,
+        "y": 0
+      }
+    ]
+  },
+  "themes": ["africa"]
 }

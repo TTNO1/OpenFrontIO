@@ -1,4 +1,3 @@
-import { NationExecution } from "../src/core/execution/NationExecution";
 import {
   Cell,
   Difficulty,
@@ -7,7 +6,8 @@ import {
   PlayerInfo,
   PlayerType,
   UnitType,
-} from "../src/core/game/Game";
+} from "@openfront/engine-api/game/GameTypes";
+import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { setup } from "./util/Setup";
 
 // The half_land_half_ocean map is 16x16:
@@ -41,9 +41,6 @@ describe("Counter Warship Infestation", () => {
     game.addPlayer(enemyInfo);
 
     // Skip spawn phase
-    while (game.inSpawnPhase()) {
-      game.executeNextTick();
-    }
 
     const nation = game.player("nation_id");
     const enemy = game.player("enemy_id");
@@ -186,9 +183,6 @@ describe("Counter Warship Infestation", () => {
     );
 
     // Skip spawn phase
-    while (game.inSpawnPhase()) {
-      game.executeNextTick();
-    }
 
     const nation = game.player("nation_id");
     const ally = game.player("ally_id");

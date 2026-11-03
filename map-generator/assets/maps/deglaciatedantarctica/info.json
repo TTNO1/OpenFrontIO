@@ -1,5 +1,11 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "DeglaciatedAntarctica",
   "name": "Deglaciated Antarctica",
+  "translation_key": "map.deglaciatedantarctica",
+  "categories": ["antarctica", "fictional"],
+  "location": { "lat": -74, "lon": 60 },
+  "author": "Duwibi",
   "nations": [
     {
       "coordinates": [1545, 785],
@@ -46,5 +52,6 @@
       "name": "French Claim",
       "flag": "fr"
     }
-  ]
+  ],
+  "themes": ["antarctica"]
 }

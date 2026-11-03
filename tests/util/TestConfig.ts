@@ -1,15 +1,12 @@
-import { NukeMagnitude } from "../../src/core/configuration/Config";
-import { DefaultConfig } from "../../src/core/configuration/DefaultConfig";
+import { Tick, UnitType } from "@openfront/engine-api/game/GameTypes";
+import { NukeMagnitude } from "@openfront/engine-lib/configuration/Config";
 import {
-  Game,
-  Player,
-  TerraNullius,
-  Tick,
-  UnitType,
-} from "../../src/core/game/Game";
-import { TileRef } from "../../src/core/game/GameMap";
+  AttackLogicInput,
+  AttackLogicResult,
+  EngineConfig,
+} from "@openfront/engine/configuration/EngineConfig";
 
-export class TestConfig extends DefaultConfig {
+export class TestConfig extends EngineConfig {
   private _proximityBonusPortsNb: number = 0;
   private _defaultNukeSpeed: number = 4;
   private _spawnImmunityDuration: number = 0;
@@ -17,10 +14,6 @@ export class TestConfig extends DefaultConfig {
 
   disableNavMesh(): boolean {
     return this.gameConfig().disableNavMesh ?? true;
-  }
-
-  radiusPortSpawn(): number {
-    return 1;
   }
 
   proximityBonusPortsNb(totalPorts: number): number {
@@ -40,7 +33,8 @@ export class TestConfig extends DefaultConfig {
     this._defaultNukeSpeed = speed;
   }
 
-  defaultNukeSpeed(): number {
+  // Flat speed for all nuke types so test tick counts stay predictable.
+  nukeSpeed(_: UnitType): number {
     return this._defaultNukeSpeed;
   }
 
@@ -76,49 +70,12 @@ export class TestConfig extends DefaultConfig {
     return this._nationSpawnImmunityDuration;
   }
 
-  attackLogic(
-    gm: Game,
-    attackTroops: number,
-    attacker: Player,
-    defender: Player | TerraNullius,
-    tileToConquer: TileRef,
-  ): {
-    attackerTroopLoss: number;
-    defenderTroopLoss: number;
-    tilesPerTickUsed: number;
-  } {
-    return { attackerTroopLoss: 1, defenderTroopLoss: 1, tilesPerTickUsed: 1 };
-  }
-
-  attackTilesPerTick(
-    attackTroops: number,
-    attacker: Player,
-    defender: Player | TerraNullius,
-    numAdjacentTilesWithEnemy: number,
-  ): number {
-    return 1;
+  attackLogic(_input: AttackLogicInput): AttackLogicResult {
+    return { attackerTroopLoss: 1, defenderTroopLoss: 1, tickFraction: 1 };
   }
 }
 export class UseRealAttackLogic extends TestConfig {
-  // Override to use DefaultConfig's real attackLogic
-  attackLogic(
-    gm: Game,
-    attackTroops: number,
-    attacker: Player,
-    defender: Player | TerraNullius,
-    tileToConquer: TileRef,
-  ): {
-    attackerTroopLoss: number;
-    defenderTroopLoss: number;
-    tilesPerTickUsed: number;
-  } {
-    return DefaultConfig.prototype.attackLogic.call(
-      this,
-      gm,
-      attackTroops,
-      attacker,
-      defender,
-      tileToConquer,
-    );
+  attackLogic(input: AttackLogicInput): AttackLogicResult {
+    return EngineConfig.prototype.attackLogic.call(this, input);
   }
 }

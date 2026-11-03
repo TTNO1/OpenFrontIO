@@ -1,5 +1,12 @@
 {
+  "$schema": "../../../info.schema.json",
+  "id": "BritanniaClassic",
   "name": "Britannia Classic",
+  "display_name": "Britannia (Classic)",
+  "translation_key": "map.britanniaclassic",
+  "categories": ["europe"],
+  "location": { "lat": 56.5, "lon": -4 },
+  "author": "Tiger McSwane",
   "nations": [
     {
       "coordinates": [960, 1258],
@@ -116,5 +123,6 @@
       "name": "Franks",
       "flag": "1_Franks"
     }
-  ]
+  ],
+  "themes": ["europe"]
 }

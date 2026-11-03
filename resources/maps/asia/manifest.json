@@ -1,17 +1,20 @@
 {
+  "categories": ["featured", "continental", "asia"],
+  "featured_rank": 5,
+  "id": "Asia",
   "map": {
     "height": 1200,
-    "num_land_tiles": 1079855,
+    "num_land_tiles": 1079587,
     "width": 2000
   },
   "map16x": {
     "height": 300,
-    "num_land_tiles": 64874,
+    "num_land_tiles": 64809,
     "width": 500
   },
   "map4x": {
     "height": 600,
-    "num_land_tiles": 266262,
+    "num_land_tiles": 265522,
     "width": 1000
   },
   "name": "Asia",
@@ -141,5 +144,7 @@
       "flag": "ua",
       "name": "Ukraine"
     }
-  ]
+  ],
+  "themes": ["asia"],
+  "translation_key": "map.asia"
 }

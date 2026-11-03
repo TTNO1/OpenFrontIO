@@ -1,8 +1,9 @@
+import type { NewsItem } from "@openfront/shared/ApiSchemas";
+import type { ClientPlatform } from "@openfront/shared/WireSchemas";
 import { LitElement, html, nothing } from "lit";
-import { resolveMarkdown } from "lit-markdown";
 import { customElement, state } from "lit/decorators.js";
-import type { NewsItem } from "../../core/ApiSchemas";
 import { getNews } from "../Api";
+import { clientPlatform } from "../ClientPlatform";
 import { translateText } from "../Utils";
 
 export type { NewsItem };
@@ -25,6 +26,15 @@ export function getVisibleNewsItems(items: NewsItem[]): NewsItem[] {
   return items.filter((item) => !dismissed.has(item.id));
 }
 
+export function filterNewsByPlatform(
+  items: NewsItem[],
+  platform: ClientPlatform,
+): NewsItem[] {
+  return items.filter(
+    (item) => !item.platforms?.length || item.platforms.includes(platform),
+  );
+}
+
 const typeLabelKeys: Record<string, string> = {
   tournament: "news_box.tournament",
   tutorial: "news_box.tutorial",
@@ -43,6 +53,9 @@ const typeLabelColors: Record<string, string> = {
 export class NewsBox extends LitElement {
   @state() private items: NewsItem[] = [];
   @state() private activeIndex = 0;
+  // The markdown renderer is its own chunk, loaded alongside the news.
+  private renderMarkdown: typeof import("../Markdown").renderMarkdown | null =
+    null;
   private cycleTimer: ReturnType<typeof setInterval> | null = null;
 
   createRenderRoot() {
@@ -51,12 +64,18 @@ export class NewsBox extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.loadNews();
+    void this.loadNews();
   }
 
   private async loadNews() {
     try {
-      const allItems = await getNews();
+      const [news, { renderMarkdown }] = await Promise.all([
+        getNews(),
+        import("../Markdown"),
+      ]);
+      if (!this.isConnected) return;
+      this.renderMarkdown = renderMarkdown;
+      const allItems = filterNewsByPlatform(news, clientPlatform());
       // Reset stale dismissed list when all items would be hidden
       const visible = getVisibleNewsItems(allItems);
       if (visible.length === 0 && allItems.length > 0) {
@@ -67,7 +86,7 @@ export class NewsBox extends LitElement {
       }
       this.startCycle();
     } catch (e) {
-      console.error(e);
+      console.warn(e);
     }
   }
 
@@ -115,58 +134,64 @@ export class NewsBox extends LitElement {
 
     return html`
       <div
-        class="px-2 py-2 bg-[color-mix(in_oklab,var(--frenchBlue)_75%,black)] border-y border-white/10 lg:border-y-0 lg:rounded-xl lg:p-3"
+        class="px-2 py-2 bg-surface border-y border-white/10 lg:border-y-0 lg:rounded-xl lg:p-3"
       >
         <div class="flex items-center gap-3">
           <span
-            class="shrink-0 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded ${typeLabelColors[
-              item.type
-            ] ?? typeLabelColors["announcement"]}"
+            class="shrink-0 text-[10px] font-bold tracking-wider px-2 py-0.5 rounded ${
+              typeLabelColors[item.type] ?? typeLabelColors["announcement"]
+            }"
             >${translateText(
               typeLabelKeys[item.type] ?? typeLabelKeys["announcement"],
             )}</span
           >
           <div class="flex-1 min-w-0">
-            ${item.url
-              ? html`<a
-                  href="${item.url}"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="text-sm font-medium text-white hover:text-blue-300 transition-colors truncate block"
-                  >${item.title}</a
-                >`
-              : html`<span class="text-sm font-medium text-white truncate block"
-                  >${item.title}</span
-                >`}
+            ${
+              item.url
+                ? html`<a
+                    href="${item.url}"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm font-medium text-white hover:text-blue-300 transition-colors truncate block"
+                    >${item.title}</a
+                  >`
+                : html`<span
+                    class="text-sm font-medium text-white truncate block"
+                    >${item.title}</span
+                  >`
+            }
             <span
               class="text-xs text-white/50 block [&_a]:text-blue-300 [&_a:hover]:text-blue-200"
-              >${resolveMarkdown(
+              >${this.renderMarkdown?.(
                 item.descriptionTranslationKey
                   ? translateText(item.descriptionTranslationKey)
                   : (item.description ?? ""),
               )}</span
             >
           </div>
-          ${this.items.length > 1
-            ? html`
-                <div class="flex gap-1 shrink-0">
-                  ${this.items.map(
-                    (_, i) => html`
-                      <button
-                        @click=${() => this.goTo(i)}
-                        class="w-1.5 h-1.5 rounded-full transition-colors ${i ===
-                        this.activeIndex
-                          ? "bg-white/60"
-                          : "bg-white/20 hover:bg-white/40"}"
-                        aria-label="${translateText("news_box.go_to_item", {
-                          num: i + 1,
-                        })}"
-                      ></button>
-                    `,
-                  )}
-                </div>
-              `
-            : nothing}
+          ${
+            this.items.length > 1
+              ? html`
+                  <div class="flex gap-1 shrink-0">
+                    ${this.items.map(
+                      (_, i) => html`
+                        <button
+                          @click=${() => this.goTo(i)}
+                          class="w-1.5 h-1.5 rounded-full transition-colors ${
+                            i === this.activeIndex
+                              ? "bg-white/60"
+                              : "bg-white/20 hover:bg-white/40"
+                          }"
+                          aria-label="${translateText("news_box.go_to_item", {
+                            num: i + 1,
+                          })}"
+                        ></button>
+                      `,
+                    )}
+                  </div>
+                `
+              : nothing
+          }
           <button
             @click=${() => this.dismiss(item.id)}
             class="shrink-0 p-0.5 text-white/30 hover:text-white/70 transition-colors"

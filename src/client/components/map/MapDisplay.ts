@@ -1,9 +1,18 @@
+import {
+  Difficulty,
+  GameMapType,
+  maps,
+} from "@openfront/engine-api/game/GameTypes";
 import { LitElement, html } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
-import { assetUrl } from "../../../core/AssetUrls";
-import { Difficulty, GameMapType } from "../../../core/game/Game";
-import { terrainMapFileLoader } from "../../TerrainMapFileLoader";
+import {
+  loadCachedManifest,
+  terrainMapFileLoader,
+} from "../../TerrainMapFileLoader";
 import { translateText } from "../../Utils";
+import { type MapStats, mapStats } from "./MapDetails";
+import { starIcon } from "./MapFavorites";
+import { MEDAL_ORDER, medalIcon } from "./Medals";
 
 @customElement("map-display")
 export class MapDisplay extends LitElement {
@@ -11,11 +20,14 @@ export class MapDisplay extends LitElement {
   @property({ type: Boolean }) selected = false;
   @property({ type: String }) translation: string = "";
   @property({ type: Boolean }) showMedals = false;
+  @property({ type: Boolean }) favorite = false;
   @property({ attribute: false }) wins: Set<Difficulty> = new Set();
+  @property({ attribute: false }) onToggleFavorite?: () => void;
   @state() private mapWebpPath: string | null = null;
   @state() private mapName: string | null = null;
   @state() private isLoading = true;
   @state() private hasNations = true;
+  @state() private stats?: MapStats;
   private observer: IntersectionObserver | null = null;
   private dataLoaded = false;
 
@@ -29,7 +41,7 @@ export class MapDisplay extends LitElement {
       (entries) => {
         if (entries.some((e) => e.isIntersecting) && !this.dataLoaded) {
           this.dataLoaded = true;
-          this.loadMapData();
+          void this.loadMapData();
           this.observer?.disconnect();
         }
       },
@@ -44,20 +56,35 @@ export class MapDisplay extends LitElement {
     super.disconnectedCallback();
   }
 
+  updated(changedProperties: Map<string, unknown>) {
+    // If this element is reused for a different map, reload its data —
+    // otherwise it keeps showing the previous map's thumbnail.
+    const previousMapKey = changedProperties.get("mapKey");
+    if (
+      changedProperties.has("mapKey") &&
+      previousMapKey !== undefined &&
+      previousMapKey !== this.mapKey &&
+      this.dataLoaded
+    ) {
+      void this.loadMapData();
+    }
+  }
+
   private async loadMapData() {
     if (!this.mapKey) return;
 
     try {
       this.isLoading = true;
+      this.stats = undefined;
       const mapValue = GameMapType[this.mapKey as keyof typeof GameMapType];
-      const data = terrainMapFileLoader.getMapData(mapValue);
-      this.mapWebpPath = data.webpPath;
-      const manifest = await data.manifest();
+      this.mapWebpPath = terrainMapFileLoader.getMapData(mapValue).webpPath;
+      const manifest = await loadCachedManifest(mapValue);
       this.mapName = manifest.name;
+      this.stats = mapStats(manifest);
       this.hasNations =
         Array.isArray(manifest.nations) && manifest.nations.length > 0;
     } catch (error) {
-      console.error("Failed to load map data:", error);
+      console.warn("Failed to load map data:", error);
     } finally {
       this.isLoading = false;
     }
@@ -76,6 +103,35 @@ export class MapDisplay extends LitElement {
     event.preventDefault();
   }
 
+  private handleToggleFavorite(event: Event) {
+    event.stopPropagation();
+    event.preventDefault();
+    this.onToggleFavorite?.();
+  }
+
+  private renderFavoriteButton() {
+    if (!this.onToggleFavorite) return null;
+    return html`<button
+      type="button"
+      @click=${this.handleToggleFavorite}
+      @keydown=${(e: KeyboardEvent) => e.stopPropagation()}
+      aria-pressed=${this.favorite}
+      aria-label=${translateText(
+        this.favorite ? "map_component.unfavorite" : "map_component.favorite",
+      )}
+      title=${translateText(
+        this.favorite ? "map_component.unfavorite" : "map_component.favorite",
+      )}
+      class="absolute top-1.5 right-1.5 w-7 h-7 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm transition-all duration-200 active:scale-90 ${
+        this.favorite
+          ? "opacity-100 text-cyber-yellow"
+          : "opacity-0 group-hover:opacity-100 text-white hover:text-cyber-yellow"
+      }"
+    >
+      ${starIcon(this.favorite, "w-4 h-4")}
+    </button>`;
+  }
+
   render() {
     return html`
       <div
@@ -84,75 +140,66 @@ export class MapDisplay extends LitElement {
         aria-selected="${this.selected}"
         aria-label="${this.translation ?? this.mapName ?? this.mapKey}"
         @keydown="${this.handleKeydown}"
-        class="w-full h-full p-3 flex flex-col items-center justify-between rounded-xl border cursor-pointer transition-all duration-200 active:scale-95 gap-3 group ${this
-          .selected
-          ? "bg-blue-500/20 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.3)]"
-          : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 hover:-translate-y-1"}"
+        class="relative w-full h-full p-3 flex flex-col items-center justify-between rounded-xl border cursor-pointer transition-all duration-200 active:scale-95 gap-3 group hover:z-10 focus-within:z-10 ${
+          this.selected
+            ? "bg-malibu-blue/20 border-malibu-blue/50 shadow-[var(--shadow-malibu-blue-strong)]"
+            : "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20 hover:scale-105"
+        }"
       >
-        ${this.isLoading
-          ? html`<div
-              class="w-full aspect-[2/1] text-white/40 transition-transform duration-200 rounded-lg bg-black/20 text-xs font-bold uppercase tracking-wider flex items-center justify-center animate-pulse"
-            >
-              ${translateText("map_component.loading")}
-            </div>`
-          : this.mapWebpPath
+        ${
+          this.isLoading
             ? html`<div
-                class="w-full aspect-[2/1] relative overflow-hidden rounded-lg bg-black/20"
+                class="w-full aspect-[2/1] text-white/40 transition-transform duration-200 rounded-lg bg-black/20 text-xs font-bold uppercase tracking-wider flex items-center justify-center animate-pulse"
               >
-                <img
-                  src="${this.mapWebpPath}"
-                  alt="${this.translation || this.mapName}"
-                  draggable="false"
-                  @dragstart=${this.preventImageDrag}
-                  class="w-full h-full object-cover ${this.selected
-                    ? "opacity-100"
-                    : "opacity-80"} group-hover:opacity-100 transition-opacity duration-200"
-                />
+                ${translateText("common.loading")}
               </div>`
-            : html`<div
-                class="w-full aspect-[2/1] text-red-400 transition-transform duration-200 rounded-lg bg-red-500/10 text-xs font-bold uppercase tracking-wider flex items-center justify-center"
-              >
-                ${translateText("map_component.error")}
-              </div>`}
-        ${this.showMedals && this.hasNations
-          ? html`<div class="flex gap-1 justify-center w-full">
-              ${this.renderMedals()}
-            </div>`
-          : null}
+            : this.mapWebpPath
+              ? html`<div
+                  class="w-full aspect-[2/1] relative overflow-hidden rounded-lg bg-black/20"
+                >
+                  <img
+                    src="${this.mapWebpPath}"
+                    alt="${this.translation || this.mapName}"
+                    draggable="false"
+                    @dragstart=${this.preventImageDrag}
+                    class="w-full h-full object-cover ${
+                      this.selected ? "opacity-100" : "opacity-80"
+                    } group-hover:opacity-100 transition-opacity duration-200"
+                  />
+                  ${this.renderFavoriteButton()}
+                </div>`
+              : html`<div
+                  class="w-full aspect-[2/1] text-red-400 transition-transform duration-200 rounded-lg bg-red-500/10 text-xs font-bold uppercase tracking-wider flex items-center justify-center"
+                >
+                  ${translateText("map_component.error")}
+                </div>`
+        }
+        ${
+          this.showMedals && this.hasNations
+            ? html`<div class="flex gap-1 justify-center w-full">
+                ${this.renderMedals()}
+              </div>`
+            : null
+        }
         <div
           class="text-xs font-bold text-white uppercase tracking-wider text-center leading-tight break-words hyphens-auto"
         >
           ${this.translation || this.mapName}
         </div>
+        <map-details
+          class="contents"
+          .map=${maps.find((m) => m.id === this.mapKey)}
+          .stats=${this.stats}
+        ></map-details>
       </div>
     `;
   }
 
   private renderMedals() {
-    const medalOrder: Difficulty[] = [
-      Difficulty.Easy,
-      Difficulty.Medium,
-      Difficulty.Hard,
-      Difficulty.Impossible,
-    ];
-    const colors: Record<Difficulty, string> = {
-      [Difficulty.Easy]: "var(--medal-easy)",
-      [Difficulty.Medium]: "var(--medal-medium)",
-      [Difficulty.Hard]: "var(--medal-hard)",
-      [Difficulty.Impossible]: "var(--medal-impossible)",
-    };
     const wins = this.readWins();
-    return medalOrder.map((medal) => {
-      const earned = wins.has(medal);
-      const mask = `url('${assetUrl("images/MedalIconWhite.svg")}') no-repeat center / contain`;
-      return html`<div
-        class="w-5 h-5 ${earned ? "opacity-100" : "opacity-25"}"
-        style="background-color:${colors[
-          medal
-        ]}; mask: ${mask}; -webkit-mask: ${mask};"
-        title=${translateText(`difficulty.${medal.toLowerCase()}`)}
-      ></div>`;
-    });
+    return MEDAL_ORDER.map((medal) =>
+      medalIcon(medal, "w-5 h-5", wins.has(medal)),
+    );
   }
 
   private readWins(): Set<Difficulty> {

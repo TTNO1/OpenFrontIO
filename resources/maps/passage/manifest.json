@@ -1,4 +1,6 @@
 {
+  "categories": ["fictional"],
+  "id": "Passage",
   "map": {
     "height": 400,
     "num_land_tiles": 803994,
@@ -6,12 +8,12 @@
   },
   "map16x": {
     "height": 100,
-    "num_land_tiles": 46347,
+    "num_land_tiles": 46344,
     "width": 1500
   },
   "map4x": {
     "height": 200,
-    "num_land_tiles": 195775,
+    "num_land_tiles": 195716,
     "width": 3000
   },
   "name": "Passage",
@@ -80,5 +82,6 @@
       "coordinates": [5906, 364],
       "name": "Eastos"
     }
-  ]
+  ],
+  "translation_key": "map.passage"
 }

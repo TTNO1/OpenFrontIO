@@ -1,5 +1,11 @@
 {
-  "name": "BetweenTwoSeas",
+  "$schema": "../../../info.schema.json",
+  "id": "BetweenTwoSeas",
+  "name": "Between Two Seas",
+  "translation_key": "map.betweentwoseas",
+  "categories": ["europe", "asia"],
+  "location": { "lat": 46.5, "lon": 41 },
+  "author": "APuddle210",
   "nations": [
     {
       "coordinates": [40, 674],
@@ -76,5 +82,6 @@
       "flag": "Circassia",
       "name": "Circassia"
     }
-  ]
+  ],
+  "themes": ["europe", "asia"]
 }

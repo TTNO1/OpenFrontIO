@@ -10,6 +10,7 @@ import { ConstructionExecution } from "@openfront/engine/execution/ConstructionE
 import { NationStructureBehavior } from "@openfront/engine/execution/nation/NationStructureBehavior";
 import { NationStructurePlacement } from "@openfront/engine/execution/nation/NationStructurePlacement";
 import { Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { Cluster } from "@openfront/engine/game/TrainStation";
 import { vi } from "vitest";
 import { createGame, L, W } from "./core/pathfinding/_fixtures";
@@ -518,7 +519,7 @@ describe("NationStructureBehavior defense posts (real simulation)", () => {
     const { game, nation, invader } = makeFrontGame(Difficulty.Hard);
     withCities(game, nation, 4);
     invader.setTroops(20_000);
-    nation.updateRelation(invader, -100);
+    nation.applyRelation(invader, RelationEvent.Attack);
 
     const spy = vi.spyOn(game, "addExecution");
     expect(proactive(game, nation)).toBe(true);
@@ -537,7 +538,7 @@ describe("NationStructureBehavior defense posts (real simulation)", () => {
     const { game, nation, invader } = makeFrontGame(Difficulty.Medium);
     withCities(game, nation, 4);
     invader.setTroops(20_000);
-    nation.updateRelation(invader, -100);
+    nation.applyRelation(invader, RelationEvent.Attack);
     expect(proactive(game, nation)).toBe(false);
   });
 
@@ -567,7 +568,7 @@ describe("NationStructureBehavior defense posts (real simulation)", () => {
       const { game, nation, invader } = makeFrontGame(difficulty);
       withCities(game, nation, 4);
       invader.setTroops(troops);
-      if (hostile) nation.updateRelation(invader, -100);
+      if (hostile) nation.applyRelation(invader, RelationEvent.Attack);
       expect(proactive(game, nation)).toBe(built);
     },
   );
@@ -585,7 +586,7 @@ describe("NationStructureBehavior defense posts (real simulation)", () => {
     });
     for (const p of [invader, invader2]) {
       p.setTroops(20_000);
-      nation.updateRelation(p, -100);
+      nation.applyRelation(p, RelationEvent.Attack);
     }
     withCities(game, nation, 2);
 
@@ -601,7 +602,7 @@ describe("NationStructureBehavior defense posts (real simulation)", () => {
     const { game, nation, invader } = makeFrontGame(Difficulty.Impossible);
     withCities(game, nation, 1);
     invader.setTroops(20_000);
-    nation.updateRelation(invader, -100);
+    nation.applyRelation(invader, RelationEvent.Attack);
     expect(proactive(game, nation)).toBe(false);
   });
 });

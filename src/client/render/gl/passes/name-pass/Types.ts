@@ -56,6 +56,10 @@ export interface PlayerSlot {
   nameLen: number;
   troopLen: number;
   lastTroopStr: string;
+  garrisonLen: number;
+  lastGarrisonStr: string;
+  empireLen: number;
+  lastEmpireStr: string;
   /** Last 500ms bucket this slot's troop string was refreshed in (staggered per slot). */
   lastTroopBucket: number;
   /** URL identifying which flag this player wants (dedup key). undefined = none. */
@@ -98,5 +102,5 @@ export const CHAR_RANGE = 384;
 /** Max characters per text line (name or troop count). */
 export const MAX_CHARS = 32;
 
-/** Lines per player: 0 = name, 1 = troop count. */
-export const LINES_PER_PLAYER = 2;
+/** Lines per player: 0 = name, 1 = troops, 2 = empire, 3 = garrison. */
+export const LINES_PER_PLAYER = 4;

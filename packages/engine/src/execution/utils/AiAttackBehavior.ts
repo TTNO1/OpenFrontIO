@@ -17,6 +17,7 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Attack, Game, Player, Unit } from "../../game/Game";
+import { RELATION_READ } from "../../game/RelationMemory";
 import {
   canBuildTransportShip,
   targetTransportTile,
@@ -91,7 +92,31 @@ export abstract class AiAttackBehavior {
   }
 
   sendAttack(target: Player | TerraNullius, force = false): boolean {
+    if (
+      this.player.empire() !== null &&
+      target.isPlayer() &&
+      !this.player.canAttackPlayer(target)
+    ) {
+      return false;
+    }
+    if (
+      target.isPlayer() &&
+      this.player.type() === PlayerType.Nation &&
+      (target.type() === PlayerType.Nation || target.type() === PlayerType.Human) &&
+      this.player.relationValue(target) >= RELATION_READ.noAttack
+    ) {
+      return false;
+    }
     if (!force && !this.shouldAttack(target)) return false;
+    // A vassalage offer this turn is instead of an attack.
+    if (
+      target.isPlayer() &&
+      this.player
+        .outgoingVassalageRequests()
+        .some((request) => request.recipient() === target)
+    ) {
+      return false;
+    }
 
     if (target.isPlayer()) {
       if (this.player.sharesBorderWith(target)) {

@@ -209,9 +209,14 @@ export class SpatialQuery {
       // Single pass over the border set (Array.from + filter walked it twice
       // and allocated a full copy).
       const shores: TileRef[] = [];
-      player.borderTiles().forEach((t) => {
+      const consider = (t: TileRef) => {
         if (isValidTile(t)) shores.push(t);
-      });
+      };
+      player.borderTiles().forEach(consider);
+      // Troop transports may launch from a vassal's shore.
+      for (const vassal of player.vassals()) {
+        vassal.borderTiles().forEach(consider);
+      }
       if (shores.length === 0) return null;
 
       const path = PathFinding.Water(gm).findPath(shores, target);

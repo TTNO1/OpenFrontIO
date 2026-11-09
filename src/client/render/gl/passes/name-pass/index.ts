@@ -391,6 +391,10 @@ export class NamePass {
             nameLen: 0,
             troopLen: 0,
             lastTroopStr: "",
+            garrisonLen: 0,
+            lastGarrisonStr: "",
+            empireLen: 0,
+            lastEmpireStr: "",
             lastTroopBucket: -1,
             flagUrl: p.flag,
             flagLayerIdx: -1,
@@ -494,6 +498,22 @@ export class NamePass {
           slot.troopLen = Math.min(troopStr.length, MAX_CHARS);
           slot.lastTroopStr = troopStr;
           this.uploadStringRow(slot.index * LINES_PER_PLAYER + 1, troopStr);
+          dirty = true;
+        }
+        const garrison = ps?.absorption ?? 0;
+        const garrisonStr = garrison > 0 ? renderTroops(garrison) : "";
+        const empireStr = this.empireLabel(ps);
+        // Empire name sits under the troops. Garrison sits under that name,
+        // or directly under the troops when there is no empire.
+        const line2 = empireStr !== "" ? empireStr : garrisonStr;
+        const line3 = empireStr !== "" ? garrisonStr : "";
+        if (line2 !== slot.lastEmpireStr || line3 !== slot.lastGarrisonStr) {
+          slot.lastEmpireStr = line2;
+          slot.empireLen = Math.min(line2.length, MAX_CHARS);
+          slot.lastGarrisonStr = line3;
+          slot.garrisonLen = Math.min(line3.length, MAX_CHARS);
+          this.uploadStringRow(slot.index * LINES_PER_PLAYER + 2, line2);
+          this.uploadStringRow(slot.index * LINES_PER_PLAYER + 3, line3);
           dirty = true;
         }
       }
@@ -627,6 +647,12 @@ export class NamePass {
   // -------------------------------------------------------------------------
 
   /** Lay out a string into CPU buffers (flushed to GPU in draw). Returns halfWidth. */
+  private empireLabel(ps: PlayerState | undefined): string {
+    const link = ps?.vassalages?.find((row) => !row.isOtherVassal);
+    if (link === undefined) return "";
+    return this.playerByID.get(link.other)?.displayName ?? "";
+  }
+
   private uploadStringRow(row: number, text: string): number {
     const halfWidth = layoutString(
       text,
@@ -733,7 +759,10 @@ export class NamePass {
       slot.nukeActive,
       slot.inDoomsdayClock || slot.doomsdayClockDraining,
     ].filter(Boolean).length;
-    d[off + 35] = 0.0;
+    d[off + 35] = 0;
+    // Column 9: empire name length, garrison length
+    d[off + 36] = slot.empireLen;
+    d[off + 37] = slot.garrisonLen;
 
     this.playerDataDirty = true;
   }

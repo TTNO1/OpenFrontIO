@@ -182,8 +182,14 @@ export function playerStateFromUpdate(pu: PlayerUpdate): PlayerState {
     targets: pu.targets!.slice(),
     outgoingAttacks: pu.outgoingAttacks!,
     incomingAttacks: pu.incomingAttacks!,
+    outgoingTileDonations: pu.outgoingTileDonations ?? [],
+    absorption: pu.absorption ?? 0,
     outgoingAllianceRequests: pu.outgoingAllianceRequests!.slice(),
+    outgoingVassalageRequests: pu.outgoingVassalageRequests?.slice() ?? [],
+    outgoingSelfVassalageRequests:
+      pu.outgoingSelfVassalageRequests?.slice() ?? [],
     alliances: pu.alliances!,
+    vassalages: pu.vassalages ?? [],
     outgoingEmojis: pu.outgoingEmojis!,
   };
 }

@@ -17,6 +17,7 @@ import {
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player, Unit } from "../game/Game";
+import { RelationEvent } from "../game/RelationMemory";
 import { UniversalPathFinding } from "../pathfinding/PathFinder";
 import {
   ParabolaUniversalPathFinder,
@@ -105,6 +106,13 @@ export class MirvExecution implements Execution {
   }
 
   tick(ticks: number): void {
+    if (this.nuke === null && this.player.empire() !== null) {
+      const owner = this.mg.owner(this.dst);
+      if (owner.isPlayer() && !this.player.canAttackPlayer(owner)) {
+        this.active = false;
+        return;
+      }
+    }
     if (this.nuke === null) {
       const spawn = this.player.canBuild(UnitType.MIRV, this.dst);
       if (spawn === false) {
@@ -129,8 +137,8 @@ export class MirvExecution implements Execution {
           this.player.breakAlliance(alliance);
         }
         if (this.targetPlayer !== this.player) {
-          this.targetPlayer.updateRelation(this.player, -100);
-          this.player.updateRelation(this.targetPlayer, -100);
+          this.targetPlayer.applyRelation(this.player, RelationEvent.ReceiveMirv);
+          this.player.applyRelation(this.targetPlayer, RelationEvent.SendMirv);
         }
       }
       const x = Math.floor((this.baseX + this.mg.x(this.nuke.tile())) / 2);

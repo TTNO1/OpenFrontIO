@@ -6,7 +6,7 @@
 
 import type { Team } from "@openfront/engine-api/game/GameTypes";
 import type { PlayerCosmetics } from "@openfront/shared/WireSchemas";
-import { type Colord, colord } from "colord";
+import { Colord, colord, RgbaColor } from "colord";
 import type { Theme } from "../theme/ThemeProvider";
 
 /**
@@ -42,4 +42,15 @@ export function resolvePlayerColors(
       (focused ? theme.focusedBorderColor() : themedBorder).toHex(),
   );
   return { territory, border };
+}
+
+export function gammaMix(color1: Colord, color2: Colord, weight1: number): Colord {
+  const rgba1 = color1.rgba;
+  const rgba2 = color2.rgba;
+  const weight2 = 1 - weight1;
+  const newR = Math.sqrt((rgba1.r**2) * weight1 + (rgba2.r**2) * weight2);
+  const newG = Math.sqrt((rgba1.g**2) * weight1 + (rgba2.g**2) * weight2);
+  const newB = Math.sqrt((rgba1.b**2) * weight1 + (rgba2.b**2) * weight2);
+  const newA = rgba1.a * weight1 + rgba2.a**2 * weight2;
+  return new Colord({r: newR, g: newG, b: newB, a: newA});
 }

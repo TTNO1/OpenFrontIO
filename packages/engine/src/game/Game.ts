@@ -1,4 +1,7 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
+import { RelationEvent } from "./RelationMemory";
+
+export type { Tick };
 import {
   AllianceInfo,
   AllPlayers,
@@ -375,7 +378,7 @@ export interface Player extends PlayerLike {
   // State & Properties
   isAlive(): boolean;
   isTraitor(): boolean;
-  markTraitor(): void;
+  markTraitor(severity?: number): void;
   // Doomsday Clock (anti-stall): marked when below the rising territory bar.
   inDoomsdayClock(): boolean;
   /** Territory is actively rotting away (the final doomsday phase). */
@@ -430,6 +433,8 @@ export interface Player extends PlayerLike {
   // the live PlayerUpdate for the leaderboard "Gold Income/min" column.
   goldEarned(): Gold;
   troops(): number;
+  /** Total of troops in outgoing attacks. */
+  outgoingTroops(): number;
   weightedEmpireTroops(weight?: number): number;
   setTroops(troops: number): void;
   addTroops(troops: number): void;
@@ -475,9 +480,33 @@ export interface Player extends PlayerLike {
   nearby(): (Player | TerraNullius)[];
   sharesBorderWith(other: Player | TerraNullius): boolean;
   relation(other: Player): Relation;
+  relationValue(other: Player): number;
   allRelationsSorted(): { player: Player; relation: Relation }[];
-  updateRelation(other: Player, delta: number): void;
+  applyRelation(
+    other: Player,
+    event: RelationEvent,
+    heatAmount?: number,
+    permanentAmount?: number,
+  ): void;
+  setRelationHeat(other: Player, event: RelationEvent, signed: number): void;
   decayRelations(): void;
+  /**
+   * @param threat 
+   * @returns A ratio of the threat posed by 'threat' to this
+   */
+  threatScore(threat: Player): number;
+  absorption(): number;
+  navalPorts(): Unit[];
+  /**
+   * 
+   * @param vassal 
+   * @param troops 
+   * @returns the number of troops committed
+   */
+  commitTroopsToVassal(vassal: Player, troops: number): number;
+  absorbIncoming(loss: number): number;
+  releaseCommitted(vassal: Player): void;
+  getTraitorSeverity(): number;
   isOnSameTeam(other: Player): boolean;
   // Either allied or on same team.
   isFriendly(other: Player, treatAFKFriendly?: boolean): boolean;
@@ -510,7 +539,15 @@ export interface Player extends PlayerLike {
   canBecomeVassalOf(other: Player): boolean;
   canBecomeEmpireOf(other: Player): boolean;
   breakVassalage(vassalage: Vassalage): void;
+  /**
+   * 
+   * @param recipient the player to become my vassal
+   */
   createVassalageRequest(recipient: Player): VassalageRequest | null;
+  /**
+   * 
+   * @param recipient the player to become my empire
+   */
   createSelfVassalageRequest(recipient: Player): VassalageRequest | null;
 
   // Targeting

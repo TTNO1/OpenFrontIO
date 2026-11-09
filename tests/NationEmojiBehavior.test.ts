@@ -19,6 +19,7 @@ import {
   NationEmojiBehavior,
 } from "@openfront/engine/execution/nation/NationEmojiBehavior";
 import { Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { MockInstance } from "vitest";
 import { setup } from "./util/Setup";
 
@@ -96,8 +97,8 @@ describe("Nation replies to emojis", () => {
     game.map().forEachTile((tile) => {
       (game.x(tile) < 100 ? nation : human).conquer(tile);
     });
-    nation.updateRelation(human, nationRelation);
-    human.updateRelation(nation, humanRelation);
+    nation.setRelationHeat(human, RelationEvent.CommittedTroops, nationRelation);
+    human.setRelationHeat(nation, RelationEvent.CommittedTroops, humanRelation);
     game.addExecution(
       new EmojiExecution(
         human,
@@ -116,7 +117,7 @@ describe("Nation replies to emojis", () => {
   }
 
   it.each([
-    ["🖕", "hostile", Relation.Hostile, EMOJI_GOT_INSULTED],
+    ["🖕", "distrustful", Relation.Distrustful, EMOJI_GOT_INSULTED],
     ["🤡", "distrustful", Relation.Distrustful, EMOJI_CONFUSED],
     ["❤️", "neutral", Relation.Neutral, EMOJI_LOVE],
   ])(
@@ -131,7 +132,7 @@ describe("Nation replies to emojis", () => {
   );
 
   it.each([
-    [Difficulty.Easy, "friendly", Relation.Friendly],
+    [Difficulty.Easy, "neutral", Relation.Neutral],
     [Difficulty.Medium, "neutral", Relation.Neutral],
   ])(
     "%s: a heart leaves a nearly friendly nation %s",

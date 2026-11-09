@@ -12,6 +12,7 @@ import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/A
 import { NationAllianceBehavior } from "@openfront/engine/execution/nation/NationAllianceBehavior";
 import { NationEmojiBehavior } from "@openfront/engine/execution/nation/NationEmojiBehavior";
 import { AllianceRequest, Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { setup } from "./util/Setup";
 
 let game: Game;
@@ -58,7 +59,7 @@ describe("AllianceBehavior.handleAllianceRequests", () => {
 
   function setupAllianceRequest({
     isTraitor = false,
-    relationDelta = 2,
+    relationDelta = 50,
     numTilesPlayer = 10,
     numTilesRequestor = 10,
     alliancesCount = 0,
@@ -66,8 +67,8 @@ describe("AllianceBehavior.handleAllianceRequests", () => {
   } = {}) {
     if (isTraitor) requestor.markTraitor();
 
-    player.updateRelation(requestor, relationDelta);
-    requestor.updateRelation(player, relationDelta);
+    player.setRelationHeat(requestor, RelationEvent.CommittedTroops, relationDelta);
+    requestor.setRelationHeat(player, RelationEvent.CommittedTroops, relationDelta);
 
     game.map().forEachTile((tile) => {
       if (game.map().isLand(tile)) {
@@ -125,7 +126,7 @@ describe("AllianceBehavior.handleAllianceRequests", () => {
   });
 
   test("should reject alliance if relation is hostile", () => {
-    const request = setupAllianceRequest({ relationDelta: -2 });
+    const request = setupAllianceRequest({ relationDelta: -200 });
 
     allianceBehavior.handleAllianceRequests();
 
@@ -208,7 +209,7 @@ describe("AllianceBehavior.handleAllianceExtensionRequests", () => {
   it("lets the alliance run out with a weaker ally it distrusts", async () => {
     const { game, nation, ally, alliance, allianceBehavior } =
       await setupRenewal(50_000);
-    nation.updateRelation(ally, -200);
+    nation.setRelationHeat(ally, RelationEvent.CommittedTroops, -200);
     const spy = vi.spyOn(game, "addExecution");
 
     allianceBehavior.handleAllianceExtensionRequests();

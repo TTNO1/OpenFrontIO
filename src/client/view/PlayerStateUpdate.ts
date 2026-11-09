@@ -51,6 +51,12 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.incomingAttacks !== undefined) {
     target.incomingAttacks = pu.incomingAttacks;
   }
+  if (pu.outgoingTileDonations !== undefined) {
+    target.outgoingTileDonations = pu.outgoingTileDonations;
+  }
+  if (pu.absorption !== undefined) {
+    target.absorption = pu.absorption;
+  }
   if (pu.alliances !== undefined) target.alliances = pu.alliances;
   if (pu.outgoingVassalageRequests !== undefined) {
     target.outgoingVassalageRequests = pu.outgoingVassalageRequests.slice();

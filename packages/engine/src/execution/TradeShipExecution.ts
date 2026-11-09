@@ -210,10 +210,15 @@ export class TradeShipExecution implements Execution {
         .stats()
         .boatCapturedTrade(this.tradeShip!.owner(), this.origOwner, gold);
     } else {
-      this.srcPort.owner().addGold(gold, this.srcPort.tile());
-      this._dstPort.owner().addGold(gold, this._dstPort.tile());
-      this.srcPort.owner().addTradeGold(gold);
-      this._dstPort.owner().addTradeGold(gold);
+      const tradeGold = this.srcPort
+        .owner()
+        .hasVassalageWith(this._dstPort.owner())
+        ? gold * 2n
+        : gold;
+      this.srcPort.owner().addGold(tradeGold, this.srcPort.tile());
+      this._dstPort.owner().addGold(tradeGold, this._dstPort.tile());
+      this.srcPort.owner().addTradeGold(tradeGold);
+      this._dstPort.owner().addTradeGold(tradeGold);
       // Record stats
       this.mg
         .stats()

@@ -31,11 +31,16 @@ export type Intent =
   | AllianceRejectIntent
   | AllianceExtensionIntent
   | BreakAllianceIntent
+  | VassalageRequestIntent
+  | VassalageRejectIntent
+  | BreakVassalageIntent
   | TargetPlayerIntent
   | EmojiIntent
   | DonateGoldIntent
   | DonateTroopsIntent
+  | CommitTroopsIntent
   | DonateTilesIntent
+  | CancelTileDonationIntent
   | BuildUnitIntent
   | EmbargoIntent
   | QuickChatIntent
@@ -58,11 +63,20 @@ export type CancelBoatIntent = z.infer<typeof CancelBoatIntentSchema>;
 export type AllianceRequestIntent = z.infer<typeof AllianceRequestIntentSchema>;
 export type AllianceRejectIntent = z.infer<typeof AllianceRejectIntentSchema>;
 export type BreakAllianceIntent = z.infer<typeof BreakAllianceIntentSchema>;
+export type VassalageRequestIntent = z.infer<
+  typeof VassalageRequestIntentSchema
+>;
+export type VassalageRejectIntent = z.infer<typeof VassalageRejectIntentSchema>;
+export type BreakVassalageIntent = z.infer<typeof BreakVassalageIntentSchema>;
 export type TargetPlayerIntent = z.infer<typeof TargetPlayerIntentSchema>;
 export type EmojiIntent = z.infer<typeof EmojiIntentSchema>;
 export type DonateGoldIntent = z.infer<typeof DonateGoldIntentSchema>;
 export type DonateTroopsIntent = z.infer<typeof DonateTroopIntentSchema>;
+export type CommitTroopsIntent = z.infer<typeof CommitTroopsIntentSchema>;
 export type DonateTilesIntent = z.infer<typeof DonateTilesIntentSchema>;
+export type CancelTileDonationIntent = z.infer<
+  typeof CancelTileDonationIntentSchema
+>;
 export type EmbargoIntent = z.infer<typeof EmbargoIntentSchema>;
 export type BuildUnitIntent = z.infer<typeof BuildUnitIntentSchema>;
 export type UpgradeStructureIntent = z.infer<
@@ -459,6 +473,23 @@ export const BreakAllianceIntentSchema = z.object({
   recipient: MappedID,
 });
 
+export const VassalageRequestIntentSchema = z.object({
+  type: z.literal("vassalageRequest"),
+  recipient: MappedID,
+  // True: the sender becomes the empire. False: the sender becomes the vassal.
+  asEmpire: z.boolean(),
+});
+
+export const VassalageRejectIntentSchema = z.object({
+  type: z.literal("vassalageReject"),
+  requestor: MappedID,
+});
+
+export const BreakVassalageIntentSchema = z.object({
+  type: z.literal("breakVassalage"),
+  recipient: MappedID,
+});
+
 export const TargetPlayerIntentSchema = z.object({
   type: z.literal("targetPlayer"),
   target: MappedID,
@@ -495,10 +526,21 @@ export const DonateTroopIntentSchema = z.object({
   troops: zb.float({ min: 0 }).nullable(),
 });
 
+export const CommitTroopsIntentSchema = z.object({
+  type: z.literal("commit_troops"),
+  recipient: MappedID,
+  troops: zb.float({ min: 0 }).nullable(),
+});
+
 export const DonateTilesIntentSchema = z.object({
   type: z.literal("donate_tiles"),
   recipient: MappedID,
   tiles: zb.float({ min: 0 }).nullable(),
+});
+
+export const CancelTileDonationIntentSchema = z.object({
+  type: z.literal("cancel_tile_donation"),
+  donationID: z.string(),
 });
 
 export const BuildUnitIntentSchema = z.object({
@@ -588,11 +630,16 @@ export const IntentSchema = z.discriminatedUnion("type", [
   AllianceRequestIntentSchema,
   AllianceRejectIntentSchema,
   BreakAllianceIntentSchema,
+  VassalageRequestIntentSchema,
+  VassalageRejectIntentSchema,
+  BreakVassalageIntentSchema,
   TargetPlayerIntentSchema,
   EmojiIntentSchema,
   DonateGoldIntentSchema,
   DonateTroopIntentSchema,
+  CommitTroopsIntentSchema,
   DonateTilesIntentSchema,
+  CancelTileDonationIntentSchema,
   BuildUnitIntentSchema,
   UpgradeStructureIntentSchema,
   EmbargoIntentSchema,

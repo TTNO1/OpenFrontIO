@@ -12,6 +12,11 @@ import {
 import { assertNever, toInt } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
+import {
+  GOLD_HEAT_PER_CHUNK,
+  GOLD_PERMANENT_PER_CHUNK,
+  RelationEvent,
+} from "../game/RelationMemory";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -65,9 +70,14 @@ export class DonateGoldExecution implements Execution {
       this.sender.donateGold(this.recipient, this.gold)
     ) {
       // Give relation points based on how much gold was donated
-      const relationUpdate = this.calculateRelationUpdate(this.gold, ticks);
-      if (relationUpdate > 0) {
-        this.recipient.updateRelation(this.sender, relationUpdate);
+      const chunks = this.calculateChunks(this.gold, ticks);
+      if (chunks > 0) {
+        this.recipient.applyRelation(
+          this.sender,
+          RelationEvent.SendGold,
+          chunks * GOLD_HEAT_PER_CHUNK,
+          chunks * GOLD_PERMANENT_PER_CHUNK,
+        );
       }
 
       // Only AI nations auto-respond with emojis, human players should not
@@ -77,9 +87,9 @@ export class DonateGoldExecution implements Execution {
       ) {
         // Select emoji based on donation value
         const emoji =
-          relationUpdate >= 50
+          chunks * GOLD_HEAT_PER_CHUNK >= 50
             ? EMOJI_LOVE
-            : relationUpdate > 0
+            : chunks > 0
               ? EMOJI_DONATION_OK
               : EMOJI_DONATION_TOO_SMALL;
 
@@ -115,7 +125,7 @@ export class DonateGoldExecution implements Execution {
     }
   }
 
-  private calculateRelationUpdate(goldSent: Gold, ticks: number): number {
+  private calculateChunks(goldSent: Gold, ticks: number): number {
     const chunkSize = this.getGoldChunkSize();
     // For every 5 minutes that pass, multiply the chunk size to scale with game progression
     const chunkSizeMultiplier =
@@ -123,13 +133,7 @@ export class DonateGoldExecution implements Execution {
     const adjustedChunkSize = BigInt(
       Math.round(chunkSize + chunkSize * chunkSizeMultiplier),
     );
-    // Calculate how many complete chunks were donated
-    const chunks = Number(goldSent / adjustedChunkSize);
-    // Each chunk gives 5 relation points
-    const relationUpdate = chunks * 5;
-    // Cap at 100 relation points
-    if (relationUpdate > 100) return 100;
-    return relationUpdate;
+    return Number(goldSent / adjustedChunkSize);
   }
 
   isActive(): boolean {

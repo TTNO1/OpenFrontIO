@@ -85,10 +85,12 @@ import {
   SendAttackIntentEvent,
   SendBoatAttackIntentEvent,
   SendBreakAllianceIntentEvent,
+  SendBreakVassalageIntentEvent,
   SendHashEvent,
   SendSpawnIntentEvent,
   SendTargetPlayerIntentEvent,
   SendUpgradeStructureIntentEvent,
+  SendVassalageRequestIntentEvent,
   Transport,
 } from "./Transport";
 import {
@@ -1035,6 +1037,14 @@ export class ClientGameRunner {
     this.eventBus.on(
       DoBreakAllianceEvent,
       this.doBreakAllianceUnderCursor.bind(this),
+    );
+    this.eventBus.on(
+      SendVassalageRequestIntentEvent,
+      (event) => {this.webglBuilder?.refreshPalette(this.gameView);}
+    );
+    this.eventBus.on(
+      SendBreakVassalageIntentEvent,
+      (event) => {this.webglBuilder?.refreshPalette(this.gameView);}
     );
     this.eventBus.on(
       DoTargetPlayerEvent,

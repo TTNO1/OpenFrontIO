@@ -6,9 +6,10 @@ import {
 import {
   AttackUpdate,
   GameUpdateType,
+  TileDonationUpdate,
   UnitIncomingUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
-import { renderTroops } from "@openfront/engine-lib/Format";
+import { renderNumber, renderTroops } from "@openfront/engine-lib/Format";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement } from "lit";
@@ -22,6 +23,7 @@ import {
 } from "../../TransformHandler";
 import {
   CancelAttackIntentEvent,
+  CancelTileDonationIntentEvent,
   CancelBoatIntentEvent,
   counterAttackTroops,
   SendAttackIntentEvent,
@@ -30,8 +32,10 @@ import { UIState } from "../../UIState";
 import { translateText } from "../../Utils";
 import { GameView, PlayerView, UnitView } from "../../view";
 import { getColoredSprite } from "../SpriteLoader";
+import { TileDonation } from "@openfront/engine/game/Game";
 const soldierIcon = assetUrl("images/SoldierIcon.svg");
 const swordIcon = assetUrl("images/SwordIcon.svg");
+const landIcon = assetUrl("images/TileLandIconWhite.svg");
 
 @customElement("attacks-display")
 export class AttacksDisplay extends LitElement implements Controller {
@@ -47,6 +51,7 @@ export class AttacksDisplay extends LitElement implements Controller {
   @state() private outgoingAttacks: AttackUpdate[] = [];
   @state() private outgoingLandAttacks: AttackUpdate[] = [];
   @state() private outgoingBoats: UnitView[] = [];
+  @state() private outgoingTileDonations: TileDonationUpdate[] = [];
   @state() private incomingBoats: UnitView[] = [];
 
   createRenderRoot() {
@@ -110,6 +115,8 @@ export class AttacksDisplay extends LitElement implements Controller {
       .outgoingAttacks()
       .filter((a) => a.targetID === 0);
 
+    this.outgoingTileDonations = myPlayer.outgoingTileDonations();
+
     this.outgoingBoats = myPlayer
       .units()
       .filter((u) => u.type() === UnitType.TransportShip);
@@ -148,6 +155,47 @@ export class AttacksDisplay extends LitElement implements Controller {
         ${content}
       </button>
     `;
+  }
+
+  private emitCancelTileDonation(id: string) {
+    this.eventBus.emit(new CancelTileDonationIntentEvent(id));
+  }
+
+  private renderTileDonations() {
+    if (this.outgoingTileDonations.length === 0) return html``;
+    return this.outgoingTileDonations.map(
+      (donation) => html`
+        <div
+          class="flex items-center gap-0.5 w-full bg-gray-800/92 backdrop-blur-sm sm:rounded-lg px-1.5 py-0.5 overflow-hidden"
+        >
+          ${this.renderButton({
+            content: html`<span class="inline-flex items-center"
+                ><img
+                  src="${landIcon}"
+                  class="h-4 w-4"
+                  style="filter: brightness(0) saturate(100%) invert(62%) sepia(80%) saturate(500%) hue-rotate(175deg) brightness(100%)"
+                />↑</span
+              ><span class="ml-1">${renderNumber(donation.tiles)}</span>
+              <span class="truncate ml-1"
+                >${(
+                  this.game.playerBySmallID(donation.recipientID) as PlayerView
+                )?.displayName()}</span
+              > `,
+            onClick: async () => this.tileDonationOnClick(donation),
+            className:
+              "text-left text-aquarius inline-flex items-center gap-0.5 lg:gap-1 min-w-0",
+            translate: false,
+          })}
+          ${this.renderButton({
+            content: "❌",
+            onClick: () => this.emitCancelTileDonation(donation.id),
+            className:
+              "ml-auto inline-flex items-center justify-center cursor-pointer px-1.5 py-1",
+            translate: false,
+          })}
+        </div>
+      `,
+    );
   }
 
   private emitCancelAttackIntent(id: string) {
@@ -198,6 +246,10 @@ export class AttacksDisplay extends LitElement implements Controller {
     } else {
       this.emitGoToPlayerEvent(attack.attackerID);
     }
+  }
+  
+  private async tileDonationOnClick(donation: TileDonationUpdate) {
+    this.emitGoToPlayerEvent(donation.recipientID);
   }
 
   private handleRetaliate(attack: AttackUpdate) {
@@ -461,6 +513,7 @@ export class AttacksDisplay extends LitElement implements Controller {
 
     const hasAnything =
       this.outgoingAttacks.length > 0 ||
+      this.outgoingTileDonations.length > 0 ||
       this.outgoingLandAttacks.length > 0 ||
       this.outgoingBoats.length > 0 ||
       this.incomingAttacks.length > 0 ||
@@ -474,7 +527,8 @@ export class AttacksDisplay extends LitElement implements Controller {
       <div
         class="w-full mb-1 mt-1 sm:mt-0 pointer-events-auto grid grid-cols-2 gap-1 text-white text-sm lg:text-base max-h-[7rem] overflow-y-auto"
       >
-        ${this.renderOutgoingAttacks()} ${this.renderOutgoingLandAttacks()}
+        ${this.renderOutgoingAttacks()} ${this.renderTileDonations()}
+        ${this.renderOutgoingLandAttacks()}
         ${this.renderBoats()} ${this.renderIncomingAttacks()}
         ${this.renderIncomingBoats()}
       </div>

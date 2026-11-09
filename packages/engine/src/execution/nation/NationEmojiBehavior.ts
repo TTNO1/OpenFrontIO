@@ -3,7 +3,6 @@ import {
   Difficulty,
   GameMode,
   PlayerType,
-  Relation,
   Tick,
 } from "@openfront/engine-api/game/GameTypes";
 import { flattenedEmojiTable } from "@openfront/engine-api/Schemas";
@@ -17,6 +16,7 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Game, Player } from "../../game/Game";
+import { RELATION_READ, RelationEvent } from "../../game/RelationMemory";
 import type {
   SnapshotReader,
   SnapshotWriter,
@@ -25,6 +25,14 @@ import { EmojiExecution } from "../EmojiExecution";
 
 const emojiId = (e: (typeof flattenedEmojiTable)[number]) =>
   flattenedEmojiTable.indexOf(e);
+export const EMOJI_REQUEST_VASSALAGE = (["🙏", "🧎"] as const).map(emojiId);
+export const EMOJI_REQUEST_EMPIRE = (["👑", "⛓️"] as const).map(emojiId);
+export const EMOJI_EMPIRE_DEFENSE_GRATITUDE = (["🛡️", "❤️", "😇"] as const).map(
+  emojiId,
+);
+export const EMOJI_EMPIRE_INSUFFICIENT_DEFENSE = (["🥺", "💔", "🙏"] as const).map(
+  emojiId,
+);
 export const EMOJI_ASSIST_ACCEPT = (["👍", "🤝", "🎯"] as const).map(emojiId);
 export const EMOJI_ASSIST_RELATION_TOO_LOW = (["🥱", "🤦‍♂️"] as const).map(
   emojiId,
@@ -287,7 +295,7 @@ export class NationEmojiBehavior {
     if (!this.shouldSendEmoji(otherPlayer)) return;
 
     // If we have a good relation to the other player, we are probably attacking first (aggressive)
-    if (this.player.relation(otherPlayer) >= Relation.Neutral) {
+    if (this.player.relationValue(otherPlayer) >= RELATION_READ.emoji) {
       if (!this.random.chance(2)) return;
       this.sendEmoji(otherPlayer, EMOJI_AGGRESSIVE_ATTACK);
       return;
@@ -342,7 +350,7 @@ export function respondToEmoji(
   if (!recipient.canSendEmoji(sender)) return;
 
   if (emojiString === "🖕") {
-    recipient.updateRelation(sender, -100);
+    recipient.applyRelation(sender, RelationEvent.NegativeEmoji);
     game.addExecution(
       new EmojiExecution(
         recipient,
@@ -353,7 +361,7 @@ export function respondToEmoji(
   }
 
   if (emojiString === "🤡") {
-    recipient.updateRelation(sender, -10);
+    recipient.applyRelation(sender, RelationEvent.NegativeEmoji);
     game.addExecution(
       new EmojiExecution(
         recipient,
@@ -365,13 +373,13 @@ export function respondToEmoji(
 
   if (["🕊️", "🏳️", "❤️", "🥰", "👏"].includes(emojiString)) {
     if (game.config().gameConfig().difficulty === Difficulty.Easy) {
-      recipient.updateRelation(sender, 15);
+      recipient.applyRelation(sender, RelationEvent.PositiveEmoji);
     }
     game.addExecution(
       new EmojiExecution(
         recipient,
         sender.id(),
-        sender.relation(recipient) >= Relation.Neutral
+        sender.relationValue(recipient) >= RELATION_READ.emoji
           ? random.randElement(EMOJI_LOVE)
           : random.randElement(EMOJI_CONFUSED),
       ),

@@ -14,6 +14,7 @@ uniform float uHoverGlowAlpha; // peak opacity of the hover glow
 in vec2 vUV;
 in vec4 vPlayerColor;   // player territory color (rgb) + alpha
 in float vNameShade;      // name fill grayscale shade (0.0 = black)
+flat in float vBluePlate; // 1.0 to color the text as blue garrison info
 flat in float vHighlight; // 1.0 when this player is hovered (white glow)
 out vec4 fragColor;
 
@@ -33,10 +34,16 @@ void main() {
   // Compute fill color: player color, or per-type grayscale shade
   // (black for human, grayer for nation/bot). Applies in day and night.
   vec3 defaultFill = vec3(vNameShade);
-  vec3 fillColor = mix(defaultFill, vPlayerColor.rgb, uFillUsePlayerColor);
+  vec3 fillColor;
 
   vec3 msd = texture(uAtlas, vUV).rgb;
   float sd = median(msd.r, msd.g, msd.b);
+  
+  if (vBluePlate > 0.5) {
+    fillColor = vPlayerColor.rgb + (sd * 0.5);// Holographic effect
+  } else {
+    fillColor = mix(defaultFill, vPlayerColor.rgb, uFillUsePlayerColor);
+  }
 
   vec2 unitRange = uDistRange / vec2(textureSize(uAtlas, 0));
   vec2 screenTexSize = 1.0 / fwidth(vUV);
@@ -58,6 +65,9 @@ void main() {
 
     vec3 nightOutlineColor = mix(vec3(0.0), uOutlineColor, borderT);
     vec3 borderColor = mix(nightOutlineColor, vPlayerColor.rgb, uOutlineUsePlayerColor);
+    if (vBluePlate > 0.5) {
+      borderColor = vec3(0.28, 0.28, 0.28);
+    }
     color = mix(borderColor, fillColor, fillAlpha);
     coverage = outlineAlpha;
   } else {

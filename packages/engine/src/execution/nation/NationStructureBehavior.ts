@@ -4,7 +4,6 @@ import {
   GameMode,
   Gold,
   PlayerType,
-  Relation,
   Structures,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
@@ -18,6 +17,7 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Attack, Game, Player, Unit } from "../../game/Game";
+import { RELATION_READ } from "../../game/RelationMemory";
 import type {
   SnapshotReader,
   SnapshotWriter,
@@ -378,7 +378,7 @@ export class NationStructureBehavior {
       if (!neighbor.isPlayer() || neighbor.type() === PlayerType.Bot) continue;
       if (player.isFriendly(neighbor)) continue;
       if (
-        player.relation(neighbor) === Relation.Hostile &&
+        player.relationValue(neighbor) <= RELATION_READ.defensePost &&
         neighbor.troops() >= minTroops
       ) {
         threats.add(neighbor);
@@ -647,6 +647,16 @@ export class NationStructureBehavior {
 
     if (this.maybeBuildProactiveDefensePost()) {
       return true;
+    }
+
+    // Vassals spend the turn on income buildings more often than a free nation.
+    const liege = this.player.empire?.() ?? null;
+    if (liege !== null && this.random.chance(2)) {
+      for (const economy of [UnitType.City, UnitType.Port, UnitType.Factory]) {
+        if (config.isUnitDisabled(economy)) continue;
+        if (economy === UnitType.Port && !hasCoastalTiles) continue;
+        if (this.maybeSpawnStructure(economy)) return true;
+      }
     }
 
     // Build order for non-city structures (priority order)

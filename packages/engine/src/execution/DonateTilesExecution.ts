@@ -1,5 +1,4 @@
 import {
-  Difficulty,
   PlayerID,
   PlayerType,
   TerrainType,
@@ -13,9 +12,14 @@ import {
   zRandom,
   zTiles,
 } from "@openfront/engine-lib/snapshot/SnapshotType";
-import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player, TileDonation } from "../game/Game";
+import {
+  RelationEvent,
+  TILE_DONATION_MAX_PERCENT,
+  TILE_HEAT_PER_PERCENT,
+  TILE_PERMANENT_PER_PERCENT,
+} from "../game/RelationMemory";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -35,12 +39,9 @@ export class DonateTilesExecution implements Execution {
 
 	private active = true;
 	
-	//The change in relation per proportion of a weighted total of tiles given
-	private relationPerPortionOfTiles: number;
-	//The weight applied to the sender's tile count to calculate weighted total
-	private totalTilesSenderWeight: number;
-	
-	private totalWeightedTiles: number;
+	// Sender's land when the gift started. Percentages use this, not the shrinking remainder.
+	private tileBasis = 0;
+	private initialTiles = 0;
 
 	constructor(
 		private sender: Player,
@@ -62,7 +63,10 @@ export class DonateTilesExecution implements Execution {
 
 		this.recipient = mg.player(this.recipientID);
 		this.tiles ??= mg.config().defaultDonationTilesAmount(this.sender);
-		this.tiles = Math.floor(Math.max(Math.min(this.sender.numTilesOwned(), this.tiles), 0));
+		this.tileBasis = Math.min(this.recipient.numTilesOwned(), this.sender.numTilesOwned());
+		const maxTiles = Math.floor(this.sender.numTilesOwned() * (TILE_DONATION_MAX_PERCENT / 100));
+		this.tiles = Math.floor(Math.max(Math.min(maxTiles, this.tiles), 0));
+		this.initialTiles = this.tiles;
 		
 		if (this.sender === this.recipient) {
 			console.error(`Player ${this.sender} cannot donate tiles to itself`);
@@ -109,34 +113,6 @@ export class DonateTilesExecution implements Execution {
 			}
 		}
 
-		const difficulty = this.mg.config().gameConfig().difficulty;
-		switch (difficulty) {
-			case Difficulty.Easy:
-				//+250 per 50%
-				this.relationPerPortionOfTiles = 250/.5;
-				this.totalTilesSenderWeight = 0.9;
-				break;
-			case Difficulty.Medium:
-				//+200 per 50%
-				this.relationPerPortionOfTiles = 200/.5;
-				this.totalTilesSenderWeight = 0.7;
-				break;
-			case Difficulty.Hard:
-				//+150 per 50%
-				this.relationPerPortionOfTiles = 150/.5;
-				this.totalTilesSenderWeight = 0.5;
-				break;
-			case Difficulty.Impossible:
-				//+100 per 50%
-				this.relationPerPortionOfTiles = 100/.5;
-				this.totalTilesSenderWeight = 0.3;
-				break;
-			default:
-				assertNever(difficulty);
-		}
-		
-		this.totalWeightedTiles = (this.sender.numTilesOwned() * this.totalTilesSenderWeight) + (this.recipient.numTilesOwned() * (1 - this.totalTilesSenderWeight));
-		
 	}
 
 	tick(ticks: number): void {
@@ -202,9 +178,17 @@ export class DonateTilesExecution implements Execution {
 			throw new Error("Tile Donation not initialized");
 		}
 		
-		const relationUpdate = this.relationPerPortionOfTiles * (((this.tiles as number) - this.tileDonation.tiles()) / this.totalWeightedTiles);
-		this.tileDonation.setRelationChange(relationUpdate);
-		this.recipient.updateRelation(this.sender, relationUpdate);
+		const donated = this.initialTiles - this.tileDonation.tiles();
+		const percent = this.tileBasis <= 0 ? 0 : (donated / this.tileBasis) * 100;
+		this.tileDonation.setRelationChange(percent * TILE_HEAT_PER_PERCENT);
+		if (percent > 0) {
+			this.recipient.applyRelation(
+				this.sender,
+				RelationEvent.GiveTiles,
+				percent * TILE_HEAT_PER_PERCENT,
+				percent * TILE_PERMANENT_PER_PERCENT,
+			);
+		}
 
 		// Only AI nations auto-respond with emojis, human players should not
 		if (
@@ -297,9 +281,8 @@ export class DonateTilesExecution implements Execution {
 			sender: w.player(this.sender),
 			recipientID: this.recipientID,
 			tiles: this.tiles,
-			relationPerPortionOfTiles: this.relationPerPortionOfTiles ?? null,
-			totalTilesSenderWeight: this.totalTilesSenderWeight ?? null,
-			totalWeightedTiles: this.totalWeightedTiles ?? null,
+			tileBasis: this.tileBasis,
+			initialTiles: this.initialTiles,
 		});
 	}
 
@@ -312,15 +295,8 @@ export class DonateTilesExecution implements Execution {
 		this.recipientID = s.recipientID;
 		if (s.recipient !== null) this.recipient = r.player(s.recipient);
 		this.tiles = s.tiles;
-		if (s.relationPerPortionOfTiles !== null) {
-			this.relationPerPortionOfTiles = s.relationPerPortionOfTiles;
-		}
-		if (s.totalTilesSenderWeight !== null) {
-			this.totalTilesSenderWeight = s.totalTilesSenderWeight;
-		}
-		if (s.totalWeightedTiles !== null) {
-			this.totalWeightedTiles = s.totalWeightedTiles;
-		}
+		this.tileBasis = s.tileBasis;
+		this.initialTiles = s.initialTiles;
 		this.tileDonation = null;
 		if (s.tileDonationId !== null && this.sender !== undefined) {
 			this.tileDonation =
@@ -349,15 +325,21 @@ const DonateTilesStateSchema = z.object({
 	sender: zPlayerRef(),
 	recipientID: z.string(),
 	tiles: zNum().nullable(),
-	relationPerPortionOfTiles: zNum().nullable(),
-	totalTilesSenderWeight: zNum().nullable(),
-	totalWeightedTiles: zNum().nullable(),
+	tileBasis: zNum(),
+	initialTiles: zNum(),
 });
 type DonateTilesState = z.infer<typeof DonateTilesStateSchema>;
 
 export const DonateTilesExecutionSnapshot = execSnapshotType({
 	name: "DonateTiles",
-	version: 1,
+	version: 2,
 	schema: DonateTilesStateSchema,
+	migrations: {
+		1: (data) => ({
+			...data,
+			tileBasis: 0,
+			initialTiles: data.tiles ?? 0,
+		}),
+	},
 	cls: () => DonateTilesExecution,
 });

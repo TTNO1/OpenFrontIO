@@ -306,7 +306,7 @@ export class NationStructurePlacement {
     }
 
     const maxTradeGold = Math.max(
-      Number(game.config().trainGold("ally", 0, player)),
+      Number(game.config().trainGold("vassalage", 0, player)),
       1,
     );
     const result: ReachableStation[] = [];
@@ -333,11 +333,13 @@ export class NationStructurePlacement {
       if (!neighbor.isPlayer()) continue;
       if (neighbor.type() === PlayerType.Bot) continue;
       if (!player.canTrade(neighbor)) continue;
-      const relType = player.isOnSameTeam(neighbor)
-        ? "team"
-        : player.isAlliedWith(neighbor)
-          ? "ally"
-          : "other";
+      const relType = player.hasVassalageWith(neighbor)
+        ? "vassalage"
+        : player.isOnSameTeam(neighbor)
+          ? "team"
+          : player.isAlliedWith(neighbor)
+            ? "ally"
+            : "other";
       const weight =
         Number(game.config().trainGold(relType, 0, player)) / maxTradeGold;
       for (const unit of neighbor.units(

@@ -14,6 +14,8 @@ import {
   SendEmojiIntentEvent,
   SendSpawnIntentEvent,
   SendTargetPlayerIntentEvent,
+  SendVassalageRequestIntentEvent,
+  SendCommitTroopsIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
 import { PlayerView } from "../../view";
@@ -65,6 +67,12 @@ export class PlayerActionHandler {
     this.eventBus.emit(new SendBreakAllianceIntentEvent(player, recipient));
   }
 
+  handleVassalageRequest(recipient: PlayerView, asEmpire: boolean) {
+    this.eventBus.emit(
+      new SendVassalageRequestIntentEvent(recipient, asEmpire),
+    );
+  }
+
   handleTargetPlayer(targetId: string | null) {
     if (!targetId) return;
 
@@ -81,6 +89,11 @@ export class PlayerActionHandler {
       return;
     }
     this.eventBus.emit(new SendDonateTroopsIntentEvent(recipient, amount));
+  }
+
+  handleCommitTroops(recipient: PlayerView, troops: number) {
+    if (troops <= 0) return;
+    this.eventBus.emit(new SendCommitTroopsIntentEvent(recipient, troops));
   }
   
   handleDonateTiles(recipient: PlayerView, tiles?: number) {

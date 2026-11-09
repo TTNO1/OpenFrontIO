@@ -35,10 +35,12 @@ import {
   PlayerReportedEvent,
   SendAllianceRequestIntentEvent,
   SendBreakAllianceIntentEvent,
+  SendBreakVassalageIntentEvent,
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
   SendTargetPlayerIntentEvent,
+  SendVassalageRequestIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
 import { UserSettings } from "../../UserSettings";
@@ -62,6 +64,9 @@ const targetIcon = assetUrl("images/TargetIconWhite.svg");
 const startTradingIcon = assetUrl("images/TradingIconWhite.svg");
 const traitorIcon = assetUrl("images/TraitorIconLightRed.svg");
 const breakAllianceIcon = assetUrl("images/TraitorIconWhite.svg");
+const becomeVassalIcon = assetUrl("images/BecomeVassalIconWhite.svg");
+const commitTroopIcon = assetUrl("images/CommitTroopsIconWhite.svg");
+const makeVassalIcon = assetUrl("images/MakeVassalIconWhite.svg");
 
 // The viewer's own badge from their /users/@me progress. Shown even when they
 // hide their level from others, as their profile does.
@@ -85,11 +90,13 @@ export class PlayerPanel extends LitElement implements Controller {
   private actions: PlayerActions | null = null;
   private tile: TileRef | null = null;
   private _profileForPlayerId: number | null = null;
+  private _profileWasAllied: boolean | null = null;
   private kickedPlayerIDs = new Set<string>();
   private userSettings = new UserSettings();
 
   @state() private sendTarget: PlayerView | null = null;
-  @state() private sendMode: "troops" | "gold" | "tiles" | "none" = "none";
+  @state() private sendMode: "troops" | "gold" | "tiles" | "commit" | "none" =
+    "none";
   @state() public isVisible: boolean = false;
   @state() private allianceExpiryText: string | null = null;
   @state() private allianceExpirySeconds: number | null = null;
@@ -172,10 +179,17 @@ export class PlayerPanel extends LitElement implements Controller {
       if (owner && owner.isPlayer()) {
         const pv = owner as PlayerView;
         const id = pv.id();
-        // fetch only if we don't have it or the player changed
-        if (this._profileForPlayerId !== Number(id)) {
+        const myPlayer = this.g.myPlayer();
+        const allied = myPlayer?.isAlliedWith(pv) ?? false;
+        // Refetch when the player changes or an alliance starts or ends, so
+        // the score is not stuck on the value from when the panel opened.
+        if (
+          this._profileForPlayerId !== Number(id) ||
+          this._profileWasAllied !== allied
+        ) {
           this.otherProfile = await pv.profile();
           this._profileForPlayerId = Number(id);
+          this._profileWasAllied = allied;
         }
       }
 
@@ -236,6 +250,23 @@ export class PlayerPanel extends LitElement implements Controller {
     this.requestUpdate();
   }
 
+  public openCommitTroopsModal(
+    actions: PlayerActions,
+    tile: TileRef,
+    target: PlayerView,
+    suppressNextHide = true,
+  ) {
+    this.suppressNextHide = suppressNextHide;
+    this.actions = actions;
+    this.tile = tile;
+    this.sendTarget = target;
+    this.sendMode = "commit";
+    this.moderationTarget = null;
+    this.reportTarget = null;
+    this.isVisible = true;
+    this.requestUpdate();
+  }
+
   public hide() {
     this.isVisible = false;
     this.sendMode = "none";
@@ -270,6 +301,18 @@ export class PlayerPanel extends LitElement implements Controller {
     this.hide();
   }
 
+  private handleVassalageRequest(e: Event, other: PlayerView, asEmpire: boolean) {
+    e.stopPropagation();
+    this.eventBus.emit(new SendVassalageRequestIntentEvent(other, asEmpire));
+    this.hide();
+  }
+
+  private handleBreakVassalage(e: Event, other: PlayerView) {
+    e.stopPropagation();
+    this.eventBus.emit(new SendBreakVassalageIntentEvent(other));
+    this.hide();
+  }
+
   private openSendTroops(target: PlayerView) {
     this.suppressNextHide = true;
     this.sendTarget = target;
@@ -286,6 +329,12 @@ export class PlayerPanel extends LitElement implements Controller {
     this.suppressNextHide = true;
     this.sendTarget = target;
     this.sendMode = "tiles";
+  }
+
+  private openCommitTroops(target: PlayerView) {
+    this.suppressNextHide = true;
+    this.sendTarget = target;
+    this.sendMode = "commit";
   }
 
   private handleDonateTroopClick(
@@ -313,6 +362,11 @@ export class PlayerPanel extends LitElement implements Controller {
   ) {
     e.stopPropagation();
     this.openSendTiles(other);
+  }
+
+  private handleCommitTroopsClick(e: Event, other: PlayerView) {
+    e.stopPropagation();
+    this.openCommitTroops(other);
   }
 
   private closeSend = () => {
@@ -604,17 +658,20 @@ export class PlayerPanel extends LitElement implements Controller {
   private renderRelationPillIfNation(other: PlayerView, my: PlayerView) {
     if (other.type() !== PlayerType.Nation) return html``;
     if (other.isTraitor()) return html``;
-    if (my?.isAlliedWith && my.isAlliedWith(other)) return html``;
     if (!this.otherProfile || !my) return html``;
 
     const relation =
       this.otherProfile.relations?.[my.smallID()] ?? Relation.Neutral;
+    const value = Math.round(
+      this.otherProfile.relationValues?.[my.smallID()] ?? 0,
+    );
     const cls = this.getRelationClass(relation);
     const name = this.getRelationName(relation);
+    const signed = value > 0 ? `+${value}` : `${value}`;
 
     return html`
       <div class="mt-1">
-        <span class="text-sm font-semibold ${cls}">${name}</span>
+        <span class="text-sm font-semibold ${cls}">${name} ${signed}</span>
       </div>
     `;
   }
@@ -728,8 +785,19 @@ export class PlayerPanel extends LitElement implements Controller {
                     text-white w-35 shrink-0"
         >
           <span class="mr-0.5">🛡️</span>
-          <span translate="no" class="tabular-nums w-[5ch] font-semibold">
-            ${renderTroops(other.troops() || 0)}
+          <span class="flex flex-col leading-none" translate="no">
+            <span class="tabular-nums font-semibold">
+              ${renderTroops(other.troops() || 0)}
+            </span>
+            ${
+              other.absorption() > 0
+                ? html`<span
+                    class="text-xs font-semibold tabular-nums"
+                    style="color: #1BB1E3"
+                    >${renderTroops(other.absorption())}</span
+                  >`
+                : ""
+            }
           </span>
           <span class="text-zinc-200 whitespace-nowrap">
             ${translateText("player_panel.troops")}</span
@@ -890,6 +958,61 @@ export class PlayerPanel extends LitElement implements Controller {
     `;
   }
 
+  private renderNameList(title: string, names: string[]) {
+    return html`
+      <div class="select-none">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[15px] font-medium text-zinc-200">${title}</div>
+          <span
+            class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-[10px]
+                 text-[12px] text-zinc-100 bg-white/10 border border-white/20"
+          >
+            ${names.length}
+          </span>
+        </div>
+        <div
+          class="rounded-lg bg-zinc-800/70 ring-1 ring-zinc-700/60 w-full min-w-0"
+        >
+          <ul
+            class="max-h-48 overflow-y-auto p-2 flex flex-wrap gap-1.5"
+            role="list"
+            translate="no"
+          >
+            ${
+              names.length === 0
+                ? html`<li class="text-zinc-400 text-[14px] px-1">
+                    ${translateText("common.none")}
+                  </li>`
+                : names.map(
+                    (name) => html`
+                      <li
+                        class="max-w-full inline-flex items-center rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[14px] text-zinc-100"
+                      >
+                        <span class="truncate">${name}</span>
+                      </li>
+                    `,
+                  )
+            }
+          </ul>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderVassalage(other: PlayerView) {
+    const empire = other.empire();
+    const vassals = other.vassals().map((player) => player.displayName());
+    return html`
+      <div class="flex flex-col gap-3 mt-3">
+        ${this.renderNameList(
+          translateText("player_panel.empire"),
+          empire === null ? [] : [empire.displayName()],
+        )}
+        ${this.renderNameList(translateText("player_panel.vassals"), vassals)}
+      </div>
+    `;
+  }
+
   private renderAllianceExpiry() {
     if (this.allianceExpiryText === null) return html``;
     return html`
@@ -914,8 +1037,14 @@ export class PlayerPanel extends LitElement implements Controller {
     const canDonateGold = this.actions?.interaction?.canDonateGold;
     const canDonateTroops = this.actions?.interaction?.canDonateTroops;
     const canDonateTiles = this.actions?.interaction?.canDonateTiles;
+    const canCommitTroops = this.actions?.interaction?.canCommitTroops;
     const canSendAllianceRequest =
       this.actions?.interaction?.canSendAllianceRequest;
+    const canSendVassalageRequest =
+      this.actions?.interaction?.canSendVassalageRequest;
+    const canSendSelfVassalageRequest =
+      this.actions?.interaction?.canSendSelfVassalageRequest;
+    const canBreakVassalage = this.actions?.interaction?.canBreakVassalage;
     const canSendEmoji =
       other === myPlayer
         ? this.actions?.canSendEmojiAllPlayers
@@ -998,6 +1127,19 @@ export class PlayerPanel extends LitElement implements Controller {
                 })
               : ""
           }
+          ${
+            canCommitTroops
+              ? actionButton({
+                  onClick: (e: MouseEvent) =>
+                    this.handleCommitTroopsClick(e, other),
+                  icon: commitTroopIcon,
+                  iconAlt: "Garrison",
+                  title: translateText("player_panel.commit_troops"),
+                  label: translateText("player_panel.commit_troops"),
+                  type: "normal",
+                })
+              : ""
+          }
         </div>
         <ui-divider></ui-divider>
         ${
@@ -1049,6 +1191,49 @@ export class PlayerPanel extends LitElement implements Controller {
                           title: translateText("player_panel.send_alliance"),
                           label: translateText("player_panel.send_alliance"),
                           type: "indigo",
+                        })
+                      : ""
+                  }
+                  ${
+                    canSendVassalageRequest
+                      ? actionButton({
+                          onClick: (e: MouseEvent) =>
+                            this.handleVassalageRequest(e, other, true),
+                          icon: makeVassalIcon,
+                          iconAlt: "Make vassal",
+                          title: translateText("player_panel.request_empire"),
+                          label: translateText("player_panel.request_empire"),
+                          type: "indigo",
+                        })
+                      : ""
+                  }
+                  ${
+                    canSendSelfVassalageRequest
+                      ? actionButton({
+                          onClick: (e: MouseEvent) =>
+                            this.handleVassalageRequest(e, other, false),
+                          icon: becomeVassalIcon,
+                          iconAlt: "Become vassal",
+                          title: translateText(
+                            "player_panel.request_vassalage",
+                          ),
+                          label: translateText(
+                            "player_panel.request_vassalage",
+                          ),
+                          type: "indigo",
+                        })
+                      : ""
+                  }
+                  ${
+                    canBreakVassalage
+                      ? actionButton({
+                          onClick: (e: MouseEvent) =>
+                            this.handleBreakVassalage(e, other),
+                          icon: breakAllianceIcon,
+                          iconAlt: "Break vassalage",
+                          title: translateText("player_panel.break_vassalage"),
+                          label: translateText("player_panel.break_vassalage"),
+                          type: "red",
                         })
                       : ""
                   }
@@ -1195,7 +1380,8 @@ export class PlayerPanel extends LitElement implements Controller {
                               .open=${this.sendMode !== "none"}
                               .mode=${this.sendMode}
                               .total=${
-                                this.sendMode === "troops"
+                                this.sendMode === "troops" ||
+                                this.sendMode === "commit"
                                   ? myTroopsNum
                                   : this.sendMode === "tiles"
                                     ? myTilesNum
@@ -1207,7 +1393,8 @@ export class PlayerPanel extends LitElement implements Controller {
                               .gameView=${this.g}
                               .eventBus=${this.eventBus}
                               .format=${
-                                this.sendMode === "troops"
+                                this.sendMode === "troops" ||
+                                this.sendMode === "commit"
                                   ? renderTroops
                                   : renderNumber
                               }
@@ -1269,6 +1456,7 @@ export class PlayerPanel extends LitElement implements Controller {
 
                     <!-- Alliances list -->
                     ${this.renderAlliances(other)}
+                    ${this.renderVassalage(other)}
 
                     <!-- Alliance time remaining -->
                     ${this.renderAllianceExpiry()}

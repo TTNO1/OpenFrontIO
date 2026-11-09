@@ -34,9 +34,11 @@ uniform float uHoverFadeAlpha; // alpha multiplier applied to that player's name
 out vec2 vUV;
 out vec4 vPlayerColor;  // player territory color (rgb) + alpha
 out float vNameShade;     // name fill grayscale shade (0.0 = black)
+flat out float vBluePlate; // 1 = blue fill and a dark grey outline
 flat out float vHighlight; // 1.0 when this player is hovered (white glow)
 
 void main() {
+  vBluePlate = 0.0;
   // 1. Decode instance ID → playerIdx, lineIdx, charPos
   int slotsPerPlayer = LINES * MAX_CHARS_PER_LINE;
   int playerIdx = gl_InstanceID / slotsPerPlayer;
@@ -63,7 +65,12 @@ void main() {
   }
 
   // String length for this line
-  int len = (lineIdx == 0) ? int(pd3.x) : int(pd3.y);
+  int len = int(pd3.x);
+  if (lineIdx == 1) len = int(pd3.y);
+  if (lineIdx >= 2) {
+    vec4 extra = texelFetch(uPlayerData, ivec2(9, playerIdx), 0);
+    len = int(lineIdx == 2 ? extra.x : extra.y);
+  }
   if (charPos >= len) {
     gl_Position = vec4(0.0);
     vUV = vec2(0.0);
@@ -105,8 +112,8 @@ void main() {
   // status flag; the crosshair in status-icon.vert.glsl matches this).
   bool isTargeted = texelFetch(uPlayerData, ivec2(6, playerIdx), 0).y > 0.5;
 
-  // Troop count is smaller
-  if (lineIdx == 1) {
+  // Troop count, empire name, and garrison count are smaller.
+  if (lineIdx >= 1) {
     worldScale *= uTroopSizeMultiplier;
   }
 
@@ -160,7 +167,18 @@ void main() {
   // 8. Compute world-space quad position
   float baselineY = -uBase * 0.5; // center vertically
   // Use name-line scale for offset so troops sit below the name, not overlapping
-  float lineOffsetY = (lineIdx == 1) ? uBase * nameWorldScale * 1.1 : 0.0;
+  float lineOffsetY = 0.0;
+  if (lineIdx == 1) {
+    lineOffsetY = uBase * nameWorldScale * 1.1;
+  } else if (lineIdx == 2) {
+    lineOffsetY =
+      uBase * nameWorldScale * (1.1 + uTroopSizeMultiplier * 1.45);
+  } else if (lineIdx == 3) {
+    lineOffsetY =
+      uBase *
+      nameWorldScale *
+      (1.1 + uTroopSizeMultiplier * 1.45 + uTroopSizeMultiplier * 1.2);
+  }
 
   vec2 glyphOrigin = vec2(
     cursorX + m0.y,  // + xoffset
@@ -183,6 +201,12 @@ void main() {
   // 11. UV interpolation across quad
   vUV = vec2(mix(u0, u1, aPos.x), mix(v0, v1, aPos.y));
   vPlayerColor = vec4(pd2.rgb, pd2.a * hoverAlpha); // player territory color + alpha
-  vNameShade = pd3.z;         // name fill grayscale shade (0.0 = black)
+  vNameShade = pd3.z; // name fill grayscale shade (0.0 = black)
+  // Empire name and garrison: #1BB1E3 with a dark grey outline.
+  if (lineIdx >= 2) {
+    vBluePlate = 1.0;
+    vPlayerColor = vec4(0.106, 0.694, 0.890, hoverAlpha);
+    vNameShade = 0.0;
+  }
   vHighlight = isHighlighted ? 1.0 : 0.0;
 }

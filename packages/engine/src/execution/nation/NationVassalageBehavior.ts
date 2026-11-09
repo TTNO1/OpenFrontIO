@@ -1,505 +1,266 @@
-import {
-	Difficulty,
-	GameMode,
-	PlayerType,
-	Relation,
-} from "@openfront/engine-api/game/GameTypes";
+import { PlayerType } from "@openfront/engine-api/game/GameTypes";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
-import { assertNever } from "@openfront/engine-lib/Util";
-import { Game, Player } from "../../game/Game";
-import { AllianceRequestExecution } from "../alliance/AllianceRequestExecution";
+import { EmojiExecution } from "../EmojiExecution";
+import { DonateGoldExecution } from "../DonateGoldExecution";
+import { Game, Player, VassalageRequest } from "../../game/Game";
 import {
-	EMOJI_CONFUSED,
-	EMOJI_DENY_ENEMY,
-	EMOJI_DENY_TRAITOR,
-	EMOJI_HANDSHAKE,
-	EMOJI_LOVE,
-	EMOJI_SCARED_OF_THREAT,
-	NationEmojiBehavior,
+  EMOJI_EMPIRE_DEFENSE_GRATITUDE,
+  EMOJI_EMPIRE_INSUFFICIENT_DEFENSE,
+  EMOJI_REQUEST_EMPIRE,
+  EMOJI_REQUEST_VASSALAGE,
+  NationEmojiBehavior,
 } from "./NationEmojiBehavior";
 
+/**
+ * Offers, requests, and upkeep for vassalage. Decisions follow the relation
+ * sheet: a good opinion plus a large power gap, or an overwhelming threat
+ * even without that opinion.
+ */
 export class NationVassalageBehavior {
-	//minumum ratio of other troops to my troops to become vassal of other
-	private minimumTroopFactor: number;
-	//minumum ratio of other tiles to my tiles to become vassal of other
-	private minimumTileFactor: number;
-	//proportion of total players that are vassals of other to cosnider other as having too many vassals
-	private tooManyVassalagesProportion: number;
-	
-	constructor(
-		private random: PseudoRandom,
-		private game: Game,
-		private player: Player,
-		private emojiBehavior: NationEmojiBehavior,
-	) {
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				this.minimumTroopFactor = 6;
-				this.minimumTileFactor = 1.5;
-				this.tooManyVassalagesProportion = 0.6;
-				break;
-			case Difficulty.Medium:
-				this.minimumTroopFactor = 18;
-				this.minimumTileFactor = 2.5;
-				this.tooManyVassalagesProportion = 0.4;
-				break;
-			case Difficulty.Hard:
-				this.minimumTroopFactor = 30;
-				this.minimumTileFactor = 3;
-				this.tooManyVassalagesProportion = 0.25;
-				break;
-			case Difficulty.Impossible:
-				this.minimumTroopFactor = 50;
-				this.minimumTileFactor = 4;
-				this.tooManyVassalagesProportion = 0.15;
-				break;
-		}
-	}
+  constructor(
+    private random: PseudoRandom,
+    private game: Game,
+    private player: Player,
+    private emojiBehavior: NationEmojiBehavior,
+  ) {}
+  
+  private readonly DECISION_GOOD_RELATION = 100;
+  private readonly GARRISON_GOOD_RELATION = 75;
+	private readonly TRIBUTE_GOOD_RELATION = 25;
+  
+  maintain(): void {
+    this.answerRequests();
+    this.maybeSeekVassalage();
+    this.maybeCommitGarrison();
+    this.maybePayTribute();
+    this.maybeComplain();
+		this.maybeShowGratitude();
+  }
 
-	handleVasallageRequests() {
-		for (const req of this.player.incomingAllianceRequests()) {
-			// Alliance Request intents created during the spawn phase are executed on
-			// the first tick post-spawn phase. With the following condition we reject
-			// all requests created during the spawn phase.
-			if (req.createdAt() <= this.game.config().numSpawnPhaseTurns() + 1) {
-				req.reject();
-				continue;
-			}
-			/*if (this.getAllianceDecision(req.requestor(), true)) {
-				req.accept();
-			} else {
-				req.reject();
-			}*/
-		}
-	}
+  private answerRequests(): void {
+    for (const req of this.player.incomingVassalageRequests()) {
+      if (req.createdAt() <= this.game.config().numSpawnPhaseTurns() + 1) {
+        req.reject();
+        continue;
+      }
+      if (this.accepts(req)) req.accept();
+      else req.reject();
+    }
+  }
 
-	maybeSendAllianceRequests(borderingEnemies: Player[]) {
-		// Only easy nations are allowed to send alliance requests to bots
-		const isAcceptablePlayerType = (p: Player) =>
-			(p.type() === PlayerType.Bot &&
-				this.game.config().gameConfig().difficulty === Difficulty.Easy) ||
-			p.type() !== PlayerType.Bot;
+  private accepts(req: VassalageRequest): boolean {
+    if (req.vassal() === this.player) {// We are being asked to become the vassal.
+      const empire = req.empire();
+      if (!this.weakerThanMostNeighbors()) return false;
+      const good = this.player.relationValue(empire) >= this.DECISION_GOOD_RELATION;
+      if (good) return this.isMuchStronger(this.player, empire);
+      return this.isOverwhelming(this.player, empire);
+    } else {// We are being asked to become the empire.
+      const vassal = req.vassal();
+      const good = this.player.relationValue(vassal) >= this.DECISION_GOOD_RELATION;
+      // Make sure we can supply the vassals garrison
+      if(this.game.config().maxTroops(this.player) < this.game.config().maxTroops(vassal) * 5) return false;
+      if (good) return this.isMuchStronger(vassal, this.player);
+      return this.isOverwhelming(vassal, this.player);
+    }
+  }
 
-		for (const enemy of borderingEnemies) {
-			if (
-				this.random.chance(30) &&
-				isAcceptablePlayerType(enemy) &&
-				this.player.canSendAllianceRequest(enemy)// &&
-				//this.getAllianceDecision(enemy, false)
-			) {
-				this.game.addExecution(
-					new AllianceRequestExecution(this.player, enemy.id()),
-				);
-			}
-		}
-	}
-	
-	//Decide if we want to become a vassal
-	private getVassalDecision(
-		otherPlayer: Player,
-		isResponse: boolean,
-	): boolean {
-		const maxTroops = this.game.config().maxTroops(this.player);
-		const numTiles = this.player.numTilesOwned();
-		const otherTroops = otherPlayer.troops();
-		const otherNumTiles = otherPlayer.numTilesOwned();
-		const troopFactor = otherTroops / maxTroops;
-		const tileFactor = otherNumTiles / numTiles;
-		let minimumTroopFactor = this.minimumTroopFactor;
-		let minimumTileFactor = this.minimumTileFactor;
+  private maybeSeekVassalage(): void {
+    for (const other of this.borderingPlayers()) {
+      if (this.player.hasVassalageWith(other)) continue;
+      if (
+        this.player.relationValue(other) >= this.DECISION_GOOD_RELATION &&
+        this.isMuchStronger(other, this.player) &&
+        this.random.chance(8) &&
+        this.player.canSendVassalageRequest(other)
+      ) {
+        this.emojiBehavior.sendEmoji(other, EMOJI_REQUEST_EMPIRE);
+        this.player.createVassalageRequest(other);
+        continue;
+      }
+      const attacked = this.player
+        .incomingAttacks()
+        .some((attack) => attack.attacker() === other);
+      const good = this.player.relationValue(other) >= this.DECISION_GOOD_RELATION;
+      const wantsProtection =
+        (good && this.isMuchStronger(this.player, other)) || (attacked && this.isOverwhelming(this.player, other));
+      if (
+        wantsProtection &&
+        this.random.chance(6) &&
+        this.player.canSendSelfVassalageRequest(other)
+      ) {
+        this.emojiBehavior.sendEmoji(other, EMOJI_REQUEST_VASSALAGE);
+        this.player.createSelfVassalageRequest(other);
+      }
+    }
+  }
+
+  private maybeCommitGarrison(): void {
+    if (!this.random.chance(2)) return;
+    
+    const vassalsToCheck = this.player.vassals().sort((a, b) => {
+			return this.player.relationValue(a) - this.player.relationValue(b);
+		});
+    
+    const myTroopCapacity = this.game.config().maxTroops(this.player);
+    let troopsToCommit = new Map<Player, number>();
+    let myTroops = this.player.troops();
+    
+    for (const vassal of vassalsToCheck) {
+      const relation = this.player.relationValue(vassal);
+      const liked = relation >= this.GARRISON_GOOD_RELATION;
+      
+      const minimumReserve = myTroopCapacity * (liked ? 0.2 : 0.4);
+      
+      const neutralGarrison = Math.max(1, this.game.config().maxTroops(vassal));
+      const bareMinimumGarrison = neutralGarrison * 0.2;
+      const currentGarrison = vassal.absorption();
+      
+      const minimumGarrisonGap = Math.max(0, bareMinimumGarrison - currentGarrison);
+      const troopsAboveMinimumReserve = Math.max(0, myTroops - minimumReserve);
+      if(troopsAboveMinimumReserve == 0) break;
+      
+      let commitment = Math.min(troopsAboveMinimumReserve, minimumGarrisonGap);
+      myTroops -= commitment;
+      troopsToCommit.set(vassal, commitment);
+    }
+    
+    for(const vassal of vassalsToCheck) {
+      const relation = this.player.relationValue(vassal);
+      const liked = relation >= this.GARRISON_GOOD_RELATION;
+      
+      const comfortableReserve = myTroopCapacity * (liked ? 0.4 : 0.65);
+      
+      const neutralGarrison = Math.max(1, this.game.config().maxTroops(vassal));
+      const committedTroops = troopsToCommit.get(vassal) ?? 0;
+      const currentGarrison = vassal.absorption() + committedTroops;
+      
+      const neutralGarrisonGap = Math.max(0, neutralGarrison - currentGarrison);
+      const troopsAboveComfortableReserve = Math.max(0, myTroops - comfortableReserve);
+      if(troopsAboveComfortableReserve == 0) break;
+      
+      let commitment = Math.min(troopsAboveComfortableReserve, neutralGarrisonGap);
+      myTroops -= commitment;
+      troopsToCommit.set(vassal, committedTroops + commitment);
+    }
+    
+    for(const vassal of vassalsToCheck) {
+      const abundantReserve = myTroopCapacity * 0.75;
+      
+      const abundantGarrison = Math.max(myTroopCapacity * 0.1, this.game.config().maxTroops(vassal) * 3);
+      const committedTroops = troopsToCommit.get(vassal) ?? 0;
+      const currentGarrison = vassal.absorption() + committedTroops;
+      
+      const abundantGarrisonGap = Math.max(0, abundantGarrison - currentGarrison);
+      const troopsAboveAbundantReserve = Math.max(0, myTroops - abundantReserve);
+      if(troopsAboveAbundantReserve == 0) break;
+      
+      let commitment = Math.min(troopsAboveAbundantReserve, abundantGarrisonGap);
+      myTroops -= commitment;
+      troopsToCommit.set(vassal, committedTroops + commitment);
+    }
 		
-		// Easy (dumb) nations sometimes get confused and accept more easily/hardly
-		if (this.isConfused()) {
-			const easier = this.random.chance(2);
-			minimumTroopFactor *= easier ? 0.5 : 2;
-			minimumTileFactor *= easier ? 2/3 : 2;
+		for(const vassal of vassalsToCheck) {
+      const abundantReserve = myTroopCapacity * 0.75;
+      
+      const maxGarrison = myTroopCapacity * 0.5;
+      const committedTroops = troopsToCommit.get(vassal) ?? 0;
+      const currentGarrison = vassal.absorption() + committedTroops;
+      
+      const maxGarrisonGap = Math.max(0, maxGarrison - currentGarrison);
+      const troopsAboveAbundantReserve = Math.max(0, myTroops - abundantReserve);
+      if(troopsAboveAbundantReserve == 0) break;
+      
+      let commitment = Math.min(troopsAboveAbundantReserve, maxGarrisonGap);
+			myTroops -= commitment;
+			troopsToCommit.set(vassal, committedTroops + commitment);
 		}
+    
+    for(const vassal of vassalsToCheck) {
+      const commitment = troopsToCommit.get(vassal) ?? 0;
+      if(commitment > 0) {
+        const given = this.player.commitTroopsToVassal(vassal, Math.floor(commitment));
+      }
+    }
 		
-		// Nearly always reject traitors
-		if (otherPlayer.isTraitor() && this.random.probability(0.9)) {
-			if (isResponse && this.random.probability(0.75)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_DENY_TRAITOR);
-			}
-			return false;
-		}
-		
-		// Make it harder to accept if otherPlayer has many vassals
-		if (this.hasTooManyVassalages(otherPlayer)) {
-			minimumTroopFactor *= 2;
-			minimumTileFactor *= 2;
-		}
-		
-		// Before caring about the relation, first check if the otherPlayer is a threat
-		// Easy (dumb) nations are blinded by hatred, they don't care about threats, they care about the relation
-		// Impossible (smart) nations on the other hand are analyzing the facts
-		if (this.isAlliancePartnerThreat(otherPlayer)) {
-			if (!isResponse && this.random.probability(0.7)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_SCARED_OF_THREAT);
-			}
-			if (isResponse && this.random.probability(0.7)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_LOVE);
-			}
-			return true;
-		}
-		// Maybe reject if we are in a team game (allying makes less sense there)
-		if (this.shouldRejectInTeamGame()) {
-			return false;
-		}
-		// Reject if relation is bad
-		if (this.player.relation(otherPlayer) < Relation.Neutral) {
-			if (isResponse && this.random.probability(0.7)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_DENY_ENEMY);
-			}
-			return false;
-		}
-		// Maybe accept if relation is friendly
-		if (this.isAlliancePartnerFriendly(otherPlayer)) {
-			if (this.random.chance(3)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_HANDSHAKE);
-			}
-			return true;
-		}
-		// Reject if we already have some alliances, we don't want to ally with the entire map
-		if (this.checkAlreadyEnoughAlliances(otherPlayer)) {
-			return false;
-		}
-		// Maybe accept if we are in the earlygame
-		if (this.isEarlygame()) {
-			return true;
-		}
-		// Accept if we are similarly strong
-		return this.isAlliancePartnerSimilarlyStrong(otherPlayer);
-	}
+  }
+
+  private maybePayTribute(): void {
+    const empire = this.player.empire();
+    if (empire === null) return;
+    const relation = this.player.relationValue(empire);
+    if (relation < this.TRIBUTE_GOOD_RELATION) return;
+    // A fonder vassal sends tribute more often, and a larger share.
+    const probability = Math.min(relation / 600, 0.333);
+    if (!this.random.probability(probability)) return;
+    const share = Math.max(1000 / relation, 5);
+    const gold = (this.player.gold() * BigInt(1000)) / BigInt(Math.round(share*1000));
+		this.player.donateGold(empire, gold);
+  }
 	
-	//Decide if we want to accept a vassal
-	private getEmpireDecision(
-		otherPlayer: Player,
-		isResponse: boolean,
-	): boolean {
-		// Easy (dumb) nations sometimes get confused and accept/reject randomly (Just like dumb humans do)
-		if (this.isConfused()) {
-			return this.random.chance(2);
-		}
-		// Nearly always reject traitors
-		if (otherPlayer.isTraitor() && this.random.nextInt(0, 100) >= 10) {
-			if (isResponse && this.random.chance(3)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_CONFUSED);
-			}
-			return false;
-		}
-		// Reject if otherPlayer has allied with a lot of players (Hard and Impossible only)
-		// To make sure there are enough non-friendly players in the game to stop the crown with nukes
-		/*if (this.hasTooManyAlliances(otherPlayer)) {
-			return false;
-		}*/
-		// Before caring about the relation, first check if the otherPlayer is a threat
-		// Easy (dumb) nations are blinded by hatred, they don't care about threats, they care about the relation
-		// Impossible (smart) nations on the other hand are analyzing the facts
-		if (this.isAlliancePartnerThreat(otherPlayer)) {
-			if (!isResponse && this.random.chance(6)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_SCARED_OF_THREAT);
-			}
-			if (isResponse && this.random.chance(6)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_LOVE);
-			}
-			return true;
-		}
-		// Maybe reject if we are in a team game (allying makes less sense there)
-		if (this.shouldRejectInTeamGame()) {
-			return false;
-		}
-		// Reject if relation is bad
-		if (this.player.relation(otherPlayer) < Relation.Neutral) {
-			if (isResponse && this.random.chance(3)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_CONFUSED);
-			}
-			return false;
-		}
-		// Maybe accept if relation is friendly
-		if (this.isAlliancePartnerFriendly(otherPlayer)) {
-			if (this.random.chance(3)) {
-				this.emojiBehavior.sendEmoji(otherPlayer, EMOJI_HANDSHAKE);
-			}
-			return true;
-		}
-		// Reject if we already have some alliances, we don't want to ally with the entire map
-		if (this.checkAlreadyEnoughAlliances(otherPlayer)) {
-			return false;
-		}
-		// Maybe accept if we are in the earlygame
-		if (this.isEarlygame()) {
-			return true;
-		}
-		// Accept if we are similarly strong
-		return this.isAlliancePartnerSimilarlyStrong(otherPlayer);
-	}
-	
-	private hasTooManyVassalages(otherPlayer: Player): boolean {
-		const totalPlayers = this.game
-			.players()
-			.filter((p) => p.type() !== PlayerType.Bot).length;
-		const otherPlayerVassalages = otherPlayer.vassalages().length;
-		return otherPlayerVassalages >= totalPlayers * this.tooManyVassalagesProportion;
-	}
-
-	private isConfused(): boolean {
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				return this.random.chance(10); // 10% chance to be confused on easy
-			case Difficulty.Medium:
-				return this.random.chance(20); // 5% chance to be confused on medium
-			case Difficulty.Hard:
-				return this.random.chance(40); // 2.5% chance to be confused on hard
-			case Difficulty.Impossible:
-				return false; // No confusion on impossible
-			default:
-				assertNever(difficulty);
+	private maybeShowGratitude(): void {
+		const empire = this.player.empire();
+		if (empire !== null
+			&& this.random.chance(10)
+			&& this.player.type() === PlayerType.Nation
+			&& empire.type() === PlayerType.Human
+			&& this.player.canSendEmoji(this.player)
+			&& this.player.absorption() > this.game.config().maxTroops(this.player) * 2.5) {
+			this.game.addExecution(
+				new EmojiExecution(
+					this.player,
+					empire.id(),
+					this.random.randElement(EMOJI_EMPIRE_DEFENSE_GRATITUDE),
+				),
+			);
 		}
 	}
 
-	private isEarlygame(): boolean {
-		const spawnTicks = this.game.config().numSpawnPhaseTurns();
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				// On easy, accept 90% in the first 5 minutes
-				return (
-					this.game.ticks() < 3000 + spawnTicks &&
-					this.random.nextInt(0, 100) >= 10
-				);
-			case Difficulty.Medium:
-				// On medium, accept 70% in the first 3 minutes
-				return (
-					this.game.ticks() < 1800 + spawnTicks &&
-					this.random.nextInt(0, 100) >= 30
-				);
-			case Difficulty.Hard:
-				// On hard, accept 50% in the first 3 minutes
-				return (
-					this.game.ticks() < 1800 + spawnTicks &&
-					this.random.nextInt(0, 100) >= 50
-				);
-			case Difficulty.Impossible:
-				// On impossible, accept 30% in the first minute
-				return (
-					this.game.ticks() < 600 + spawnTicks &&
-					this.random.nextInt(0, 100) >= 70
-				);
-			default:
-				assertNever(difficulty);
-		}
-	}
+  private maybeComplain(): void {
+    const empire = this.player.empire();
+    if (empire === null) return;
+    const cap = this.game.config().maxTroops(this.player);
+    if (cap <= 0 || this.player.absorption() >= cap) return;
+    if (!this.random.chance(10)) return;
+    if (!this.player.canSendEmoji(empire)) return;
+    this.emojiBehavior.sendEmoji(empire, EMOJI_EMPIRE_INSUFFICIENT_DEFENSE);
+  }
 
-	private isAlliancePartnerThreat(otherPlayer: Player): boolean {
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				// On easy we are very dumb, we don't see anybody as a threat
-				return false;
-			case Difficulty.Medium:
-				// On medium we just see players with much more troops as a threat
-				return otherPlayer.troops() > this.player.troops() * 2.5;
-			case Difficulty.Hard:
-				// On hard we are smarter, we check for maxTroops to see the actual strength
-				return (
-					otherPlayer.troops() > this.player.troops() &&
-					this.game.config().maxTroops(otherPlayer) >
-						this.game.config().maxTroops(this.player) * 2
-				);
-			case Difficulty.Impossible: {
-				// On impossible we check for multiple factors and try to not mess with stronger players (we want to steamroll over weaklings)
-				const otherHasMoreTroops =
-					otherPlayer.troops() > this.player.troops() * 1.5;
-				const otherHasMoreMaxTroops =
-					otherPlayer.troops() > this.player.troops() &&
-					this.game.config().maxTroops(otherPlayer) >
-						this.game.config().maxTroops(this.player) * 1.5;
-				const otherHasMoreTiles =
-					otherPlayer.troops() > this.player.troops() &&
-					otherPlayer.numTilesOwned() > this.player.numTilesOwned() * 1.5;
-				return otherHasMoreTroops || otherHasMoreMaxTroops || otherHasMoreTiles;
-			}
-			default:
-				assertNever(difficulty);
-		}
-	}
+  private borderingPlayers(): Player[] {
+    return this.player
+      .nearby()
+      .filter((n): n is Player => n.isPlayer() && n.type() !== PlayerType.Bot);
+  }
 
-	private shouldRejectInTeamGame(): boolean {
-		if (this.game.config().gameConfig().gameMode !== GameMode.Team) {
-			return false;
-		}
+  private weakerThanMostNeighbors(): boolean {
+    const neighbors = this.borderingPlayers();
+    if (neighbors.length === 0) return true;
+    let stronger = 0;
+    for (const neighbor of neighbors) {
+			if (this.player.isFriendly(neighbor)) continue;
+      if (this.player.threatScore(neighbor) > 1.2) stronger++;
+    }
+    return stronger * 2 > neighbors.length;
+  }
 
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				return this.random.nextInt(0, 100) < 25; // 25% chance to reject on easy
-			case Difficulty.Medium:
-				return this.random.nextInt(0, 100) < 50; // 50% chance to reject on medium
-			case Difficulty.Hard:
-				return this.random.nextInt(0, 100) < 75; // 75% chance to reject on hard
-			case Difficulty.Impossible:
-				return true; // 100% chance to reject on impossible
-			default:
-				assertNever(difficulty);
-		}
-	}
+  /**
+   * 
+   * @param base 
+   * @param candidate 
+   * @returns true if candidate is much stronger than base
+   */
+  private isMuchStronger(base: Player, candidate: Player): boolean {
+    return base.threatScore(candidate) >= 8;
+  }
 
-	private checkAlreadyEnoughAlliances(otherPlayer: Player): boolean {
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-				return false; // On easy we never think we have enough alliances
-			case Difficulty.Medium:
-				return this.player.alliances().length >= this.random.nextInt(4, 6);
-			case Difficulty.Hard:
-			case Difficulty.Impossible: {
-				// On hard and impossible we try to not ally with all our neighbors (If we have 2+ neighbors)
-				const borderingPlayers = this.player
-					.neighbors()
-					.filter(
-						(n): n is Player => n.isPlayer() && n.type() !== PlayerType.Bot,
-					);
-				const borderingFriends = borderingPlayers.filter(
-					(o) => this.player?.isFriendly(o) === true,
-				);
-				if (
-					borderingPlayers.length >= 2 &&
-					borderingPlayers.includes(otherPlayer)
-				) {
-					return borderingPlayers.length <= borderingFriends.length + 1;
-				}
-				if (difficulty === Difficulty.Hard) {
-					return this.player.alliances().length >= this.random.nextInt(3, 5);
-				}
-				return this.player.alliances().length >= this.random.nextInt(2, 4);
-			}
-			default:
-				assertNever(difficulty);
-		}
-	}
-
-	private isAlliancePartnerFriendly(otherPlayer: Player): boolean {
-		const { difficulty } = this.game.config().gameConfig();
-		switch (difficulty) {
-			case Difficulty.Easy:
-			case Difficulty.Medium:
-				return this.player.relation(otherPlayer) === Relation.Friendly;
-			case Difficulty.Hard:
-				return (
-					this.player.relation(otherPlayer) === Relation.Friendly &&
-					this.random.nextInt(0, 100) >= 17
-				);
-			case Difficulty.Impossible:
-				return (
-					this.player.relation(otherPlayer) === Relation.Friendly &&
-					this.random.nextInt(0, 100) >= 33
-				);
-			default:
-				assertNever(difficulty);
-		}
-	}
-
-	// It would make a lot of sense to use nextFloat here, but "there's a chance floats can cause desyncs"
-	private isAlliancePartnerSimilarlyStrong(otherPlayer: Player): boolean {
-		const { difficulty } = this.game.config().gameConfig();
-		const troopPercentRangeByDifficulty = {
-			[Difficulty.Easy]: [60, 70],
-			[Difficulty.Medium]: [70, 80],
-			[Difficulty.Hard]: [75, 85],
-			[Difficulty.Impossible]: [80, 90],
-		} as const;
-		const tilePercentRangeByDifficulty = {
-			[Difficulty.Easy]: [70, 80],
-			[Difficulty.Medium]: [80, 90],
-			[Difficulty.Hard]: [85, 95],
-			[Difficulty.Impossible]: [90, 100],
-		} as const;
-
-		const troopRange = troopPercentRangeByDifficulty[difficulty];
-		const tileRange = tilePercentRangeByDifficulty[difficulty];
-
-		const playerOutgoingTroops = this.player
-			.outgoingAttacks()
-			.reduce((sum, attack) => sum + attack.troops(), 0);
-		const otherOutgoingTroops = otherPlayer
-			.outgoingAttacks()
-			.reduce((sum, attack) => sum + attack.troops(), 0);
-		const playerTotalTroops = this.player.troops() + playerOutgoingTroops;
-		const otherTotalTroops = otherPlayer.troops() + otherOutgoingTroops;
-
-		const troopThreshold =
-			playerTotalTroops *
-			(this.random.nextInt(troopRange[0], troopRange[1]) / 100);
-		const tileThreshold =
-			this.player.numTilesOwned() *
-			(this.random.nextInt(tileRange[0], tileRange[1]) / 100);
-
-		const hasComparableTroops = otherTotalTroops > troopThreshold;
-		const hasComparableTiles =
-			otherPlayer.numTilesOwned() > tileThreshold &&
-			otherTotalTroops > playerTotalTroops * 0.5;
-		return hasComparableTroops || hasComparableTiles;
-	}
-
-	maybeBetray(otherPlayer: Player, borderingPlayerCount: number): boolean {
-		if (!this.player.isAlliedWith(otherPlayer)) return false;
-
-		const { difficulty } = this.game.config().gameConfig();
-
-		// Betray very weak players (For example MIRVed ones)
-		if (difficulty !== Difficulty.Easy && difficulty !== Difficulty.Medium) {
-			const otherPlayerMaxTroops = this.game.config().maxTroops(otherPlayer);
-			const otherPlayerOutgoingTroops = otherPlayer
-				.outgoingAttacks()
-				.reduce((sum, attack) => sum + attack.troops(), 0);
-			if (
-				otherPlayer.troops() + otherPlayerOutgoingTroops <
-					otherPlayerMaxTroops * 0.2 &&
-				otherPlayer.weightedEmpireTroops() < this.player.troops()
-			) {
-				this.betray(otherPlayer);
-				return true;
-			}
-		}
-
-		// Betray very weak players (similar check as above but for the easier difficulties)
-		// This doesn't check for maxTroops and isn't really smart. It opens the nations up for attacks, but that's intended.
-		if (
-			(difficulty === Difficulty.Easy || difficulty === Difficulty.Medium) &&
-			this.player.troops() >= otherPlayer.troops() * 10
-		) {
-			this.betray(otherPlayer);
-			return true;
-		}
-
-		// Betray traitors who aren't significantly stronger than us
-		if (
-			difficulty !== Difficulty.Easy &&
-			otherPlayer.isTraitor() &&
-			otherPlayer.troops() < this.player.troops() * 1.2
-		) {
-			this.betray(otherPlayer);
-			return true;
-		}
-
-		// Betray our only bordering player if we are much stronger than them
-		if (
-			difficulty !== Difficulty.Easy &&
-			borderingPlayerCount === 1 &&
-			otherPlayer.troops() * 3 < this.player.troops()
-		) {
-			this.betray(otherPlayer);
-			return true;
-		}
-
-		return false;
-	}
-
-	private betray(target: Player): void {
-		const alliance = this.player.allianceWith(target);
-		if (!alliance) return;
-		this.player.breakAlliance(alliance);
-	}
+  /**
+   * 
+   * @param base 
+   * @param candidate 
+   * @returns true if candidate is overwhelmingly stronger than base
+   */
+  private isOverwhelming(base: Player, candidate: Player): boolean {
+    return base.threatScore(candidate) >= 11.5;
+  }
+  
 }

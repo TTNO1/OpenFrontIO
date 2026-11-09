@@ -80,6 +80,21 @@ export class SendBreakAllianceIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendVassalageRequestIntentEvent implements GameEvent {
+  constructor(
+    public readonly recipient: PlayerView,
+    public readonly asEmpire: boolean,
+  ) {}
+}
+
+export class SendVassalageRejectIntentEvent implements GameEvent {
+  constructor(public readonly requestor: PlayerView) {}
+}
+
+export class SendBreakVassalageIntentEvent implements GameEvent {
+  constructor(public readonly recipient: PlayerView) {}
+}
+
 export class SendUpgradeStructureIntentEvent implements GameEvent {
   constructor(
     public readonly unitId: number,
@@ -170,6 +185,13 @@ export class SendDonateTroopsIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendCommitTroopsIntentEvent implements GameEvent {
+  constructor(
+    public readonly recipient: PlayerView,
+    public readonly troops: number | null,
+  ) {}
+}
+
 export class SendDonateTilesIntentEvent implements GameEvent {
   constructor(
     public readonly recipient: PlayerView,
@@ -202,6 +224,10 @@ export class SendDeleteUnitIntentEvent implements GameEvent {
 
 export class CancelAttackIntentEvent implements GameEvent {
   constructor(public readonly attackID: string) {}
+}
+
+export class CancelTileDonationIntentEvent implements GameEvent {
+  constructor(public readonly donationID: string) {}
 }
 
 export class CancelBoatIntentEvent implements GameEvent {
@@ -325,6 +351,15 @@ export class Transport {
     this.subscribe(SendBreakAllianceIntentEvent, (e) =>
       this.onBreakAllianceRequestUIEvent(e),
     );
+    this.subscribe(SendVassalageRequestIntentEvent, (e) =>
+      this.onSendVassalageRequest(e),
+    );
+    this.subscribe(SendVassalageRejectIntentEvent, (e) =>
+      this.onSendVassalageReject(e),
+    );
+    this.subscribe(SendBreakVassalageIntentEvent, (e) =>
+      this.onSendBreakVassalage(e),
+    );
     this.subscribe(SetIntentGateEvent, (e) => (this.intentGate = e.gate));
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
@@ -343,6 +378,9 @@ export class Transport {
     );
     this.subscribe(SendDonateTroopsIntentEvent, (e) =>
       this.onSendDonateTroopIntent(e),
+    );
+    this.subscribe(SendCommitTroopsIntentEvent, (e) =>
+      this.onSendCommitTroopsIntent(e),
     );
     this.subscribe(SendDonateTilesIntentEvent, (e) =>
       this.onSendDonateTilesIntent(e),
@@ -363,6 +401,9 @@ export class Transport {
     this.subscribe(SendHashEvent, (e) => this.onSendHashEvent(e));
     this.subscribe(CancelAttackIntentEvent, (e) =>
       this.onCancelAttackIntentEvent(e),
+    );
+    this.subscribe(CancelTileDonationIntentEvent, (e) =>
+      this.onCancelTileDonationIntentEvent(e),
     );
     this.subscribe(CancelBoatIntentEvent, (e) =>
       this.onCancelBoatIntentEvent(e),
@@ -809,6 +850,28 @@ export class Transport {
     });
   }
 
+  private onSendVassalageRequest(event: SendVassalageRequestIntentEvent) {
+    this.sendIntent({
+      type: "vassalageRequest",
+      recipient: event.recipient.id(),
+      asEmpire: event.asEmpire,
+    });
+  }
+
+  private onSendVassalageReject(event: SendVassalageRejectIntentEvent) {
+    this.sendIntent({
+      type: "vassalageReject",
+      requestor: event.requestor.id(),
+    });
+  }
+
+  private onSendBreakVassalage(event: SendBreakVassalageIntentEvent) {
+    this.sendIntent({
+      type: "breakVassalage",
+      recipient: event.recipient.id(),
+    });
+  }
+
   private onSendAllianceExtensionIntent(
     event: SendAllianceExtensionIntentEvent,
   ) {
@@ -879,6 +942,14 @@ export class Transport {
   private onSendDonateTroopIntent(event: SendDonateTroopsIntentEvent) {
     this.sendIntent({
       type: "donate_troops",
+      recipient: event.recipient.id(),
+      troops: event.troops,
+    });
+  }
+
+  private onSendCommitTroopsIntent(event: SendCommitTroopsIntentEvent) {
+    this.sendIntent({
+      type: "commit_troops",
       recipient: event.recipient.id(),
       troops: event.troops,
     });
@@ -995,6 +1066,13 @@ export class Transport {
     this.sendIntent({
       type: "cancel_attack",
       attackID: event.attackID,
+    });
+  }
+
+  private onCancelTileDonationIntentEvent(event: CancelTileDonationIntentEvent) {
+    this.sendIntent({
+      type: "cancel_tile_donation",
+      donationID: event.donationID,
     });
   }
 

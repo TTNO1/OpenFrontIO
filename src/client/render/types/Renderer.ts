@@ -90,6 +90,8 @@ export interface PlayerState {
   targets: number[];
   outgoingAttacks: AttackData[];
   incomingAttacks: AttackData[];
+  outgoingTileDonations?: { id: string; recipientID: number; tiles: number }[];
+  absorption?: number;
   outgoingAllianceRequests: string[];
   alliances: AllianceData[];
   outgoingVassalageRequests?: string[];

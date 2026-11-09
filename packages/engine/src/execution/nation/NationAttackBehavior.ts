@@ -22,6 +22,7 @@ import {
 } from "@openfront/engine-lib/Util";
 import { CHEAPEST_TROOP_RATIO } from "../../configuration/EngineConfig";
 import { Attack, Game, Player, Unit } from "../../game/Game";
+import { RELATION_READ, RelationEvent } from "../../game/RelationMemory";
 import {
   canBuildTransportShip,
   targetTransportTile,
@@ -805,7 +806,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
 
     for (const ally of this.player.allies()) {
       if (ally.targets().length === 0) continue;
-      if (this.player.relation(ally) < Relation.Friendly) {
+      if (this.player.relationValue(ally) < RELATION_READ.assistAlly) {
         this.emojiBehavior.sendEmoji(ally, EMOJI_ASSIST_RELATION_TOO_LOW);
         continue;
       }
@@ -819,7 +820,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
           continue;
         }
         if (!this.sendAttack(target)) continue;
-        this.player.updateRelation(ally, -20);
+        this.player.applyRelation(ally, RelationEvent.AssistAlly);
         this.emojiBehavior.sendEmoji(ally, EMOJI_ASSIST_ACCEPT);
         return true;
       }

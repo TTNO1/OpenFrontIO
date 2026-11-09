@@ -22,6 +22,7 @@ import {
 import { NationWarshipBehavior } from "@openfront/engine/execution/nation/NationWarshipBehavior";
 import { TribeAttackBehavior } from "@openfront/engine/execution/TribeAttackBehavior";
 import { Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { setup } from "./util/Setup";
 import { executeTicks } from "./util/utils";
 
@@ -1368,9 +1369,11 @@ describe("Assisting allies", () => {
     game.executeNextTick();
     expect(nation.isAlliedWith(ally)).toBe(true);
     ally.target(target);
-    // Relations are clamped to [-100, 100], so this lands exactly on relationWithAlly
-    nation.updateRelation(ally, -200);
-    nation.updateRelation(ally, 100 + relationWithAlly);
+    nation.setRelationHeat(
+      ally,
+      RelationEvent.CommittedTroops,
+      relationWithAlly,
+    );
 
     const emoji = { sendEmoji: vi.fn(), maybeSendAttackEmoji: vi.fn() };
     const behavior = new NationAttackBehavior(
@@ -1394,13 +1397,13 @@ describe("Assisting allies", () => {
 
   it("joins a friendly ally's attack, which uses up some of the friendship", async () => {
     const { nation, ally, target, behavior, emoji, attacksOn } =
-      await setupAssist(60);
+      await setupAssist(100);
     expect(nation.relation(ally)).toBe(Relation.Friendly);
 
     expect(behavior["assistAllies"]()).toBe(true);
     expect(attacksOn(target)).toHaveLength(1);
     expect(emoji.sendEmoji).toHaveBeenCalledWith(ally, EMOJI_ASSIST_ACCEPT);
-    expect(nation.relation(ally)).toBe(Relation.Neutral);
+    expect(nation.relationValue(ally)).toBe(140);
   });
 
   it("won't help an ally it isn't friendly with", async () => {

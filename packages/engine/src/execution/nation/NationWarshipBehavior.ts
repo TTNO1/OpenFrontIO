@@ -16,6 +16,7 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Game, Player, Unit } from "../../game/Game";
+import { RelationEvent } from "../../game/RelationMemory";
 import type {
   SnapshotReader,
   SnapshotWriter,
@@ -82,7 +83,7 @@ export class NationWarshipBehavior {
     if (!this.random.chance(50)) {
       return false;
     }
-    const ports = this.player.units(UnitType.Port);
+    const ports = this.player.navalPorts();
     const ships = this.player.units(UnitType.Warship);
     if (
       ports.length > 0 &&
@@ -227,7 +228,7 @@ export class NationWarshipBehavior {
       }
 
       // Possible dock snipe counter? Too niche?
-      if (!transport.owner().isAlliedWith(this.player)) {
+      if (!transport.owner().isAlliedWith(this.player) && !transport.owner().hasVassalageWith(this.player)) {
         if (
           this.game.hasUnitNearby(
             target,
@@ -301,7 +302,12 @@ export class NationWarshipBehavior {
         new ConstructionExecution(this.player, UnitType.Warship, tile),
       );
       this.emojiBehavior.maybeSendEmoji(enemy, EMOJI_WARSHIP_RETALIATION);
-      this.player.updateRelation(enemy, reason === "trade" ? -7.5 : -15);
+      this.player.applyRelation(
+        enemy,
+        reason === "trade"
+          ? RelationEvent.CaptureTradeShip
+          : RelationEvent.CaptureTroopTransport,
+      );
     }
   }
 

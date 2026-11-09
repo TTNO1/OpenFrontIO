@@ -237,6 +237,13 @@ export interface AttackUpdate {
   retreating: boolean;
 }
 
+export interface TileDonationUpdate {
+  id: string;
+  recipientID: number;
+  /** Tiles still waiting to be handed over. */
+  tiles: number;
+}
+
 /**
  * Player snapshot delivered worker -> main thread.
  *
@@ -287,6 +294,9 @@ export interface PlayerUpdate {
   outgoingEmojis?: EmojiMessage[];
   outgoingAttacks?: AttackUpdate[];
   incomingAttacks?: AttackUpdate[];
+  /** Troops parked in this player's absorption buffer by its empire. */
+  absorption?: number;
+  outgoingTileDonations?: TileDonationUpdate[];
   outgoingAllianceRequests?: PlayerID[];
   alliances?: AllianceView[];
   outgoingVassalageRequests?: PlayerID[];

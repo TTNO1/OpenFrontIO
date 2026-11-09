@@ -396,6 +396,8 @@ export const STRUCTURE_BULK_STEPS: readonly number[] = [5, 10];
 
 export interface PlayerProfile {
   relations: Record<number, Relation>;
+  /** Same keys as `relations`: the nation's numeric opinion of that player. */
+  relationValues?: Record<number, number>;
   alliances: number[];
 }
 
@@ -448,6 +450,7 @@ export interface PlayerInteraction {
   canDonateGold: boolean;
   canDonateTroops: boolean;
   canDonateTiles: boolean;
+  canCommitTroops?: boolean;
   canEmbargo: boolean;
   allianceInfo?: AllianceInfo;
 }

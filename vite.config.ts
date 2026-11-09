@@ -506,6 +506,7 @@ export default defineConfig(({ mode }) => {
     },
 
     server: {
+      hmr: false,
       port: 9000,
       strictPort: true,
       host: process.env.VITE_HOST === "lan",

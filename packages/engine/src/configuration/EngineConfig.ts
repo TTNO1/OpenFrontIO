@@ -32,6 +32,8 @@ export interface AttackLogicInput {
     numTiles: number;
     troops: number;
     isTraitor: boolean;
+    /** 2 after a vassalage break, which squares the traitor debuff. */
+    traitorSeverity?: number;
     /** Defender is disconnected and on the attacker's team. */
     isDisconnectedTeammate: boolean;
   } | null;
@@ -129,6 +131,12 @@ export class EngineConfig extends Config {
     return 0.8;
   }
 
+  /** Severity 2 (broke a vassalage) squares the debuff. Exponent 2 stays exact. */
+  private scaledDebuff(base: number, severity: number): number {
+    if (severity <= 1) return base;
+    return base * base;
+  }
+
   teamLandShareWinThresholdTenths(): number {
     return 7;
   }
@@ -217,7 +225,7 @@ export class EngineConfig extends Config {
    */
   trainSaturation(numTrainUnits: number): number {
     const damping = 1 - sigmoid(numTrainUnits, Math.LN2 / 100, 560);
-    const plateau = 0.25 * (1 - sigmoid(numTrainUnits, Math.LN2 / 150, 900));
+    const plateau = 0.25 * (1 - sigmoid(numTrainUnits, Math.LN2 / 150, 1800));
     return Math.max(damping, plateau);
   }
 
@@ -246,7 +254,7 @@ export class EngineConfig extends Config {
   }
 
   trainGold(
-    rel: "self" | "team" | "ally" | "other",
+    rel: "self" | "team" | "ally" | "vassalage" | "other",
     citiesVisited: number,
     player: PlayerLike,
   ): Gold {
@@ -254,6 +262,9 @@ export class EngineConfig extends Config {
     citiesVisited = Math.max(0, citiesVisited - 9);
     let baseGold: number;
     switch (rel) {
+      case "vassalage":
+        baseGold = 70_000;
+        break;
       case "ally":
         baseGold = 35_000;
         break;
@@ -307,7 +318,7 @@ export class EngineConfig extends Config {
    */
   tradeShipSaturation(numTradeShips: number): number {
     const damping = 1 - sigmoid(numTradeShips, Math.LN2 / 50, 330);
-    const plateau = 0.25 * (1 - sigmoid(numTradeShips, Math.LN2 / 100, 800));
+    const plateau = 0.25 * (1 - sigmoid(numTradeShips, Math.LN2 / 100, 1600));
     return Math.max(damping, plateau);
   }
 
@@ -589,8 +600,9 @@ export class EngineConfig extends Config {
       LARGE_DEFENDER_DEPTH,
     );
 
-    const traitorLossMod = defender.isTraitor ? this.traitorDefenseDebuff() : 1;
-    const traitorCostMod = defender.isTraitor ? this.traitorSpeedDebuff() : 1;
+    const severity = defender.isTraitor ? (defender.traitorSeverity ?? 1) : 1;
+    const traitorLossMod = this.scaledDebuff(this.traitorDefenseDebuff(), severity);
+    const traitorCostMod = this.scaledDebuff(this.traitorSpeedDebuff(), severity);
 
     // Defender loses its average troops-per-tile.
     const defenderTroopLoss = defender.troops / defender.numTiles;

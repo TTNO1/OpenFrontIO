@@ -13,9 +13,11 @@ import { AllianceRequestExecution } from "./alliance/AllianceRequestExecution";
 import { BreakAllianceExecution } from "./alliance/BreakAllianceExecution";
 import { AttackExecution } from "./AttackExecution";
 import { BoatRetreatExecution } from "./BoatRetreatExecution";
+import { CommitTroopsExecution } from "./CommitTroopsExecution";
 import { ConstructionExecution } from "./ConstructionExecution";
 import { DeleteUnitExecution } from "./DeleteUnitExecution";
 import { DonateGoldExecution } from "./DonateGoldExecution";
+import { CancelTileDonationExecution } from "./CancelTileDonationExecution";
 import { DonateTilesExecution } from "./DonateTilesExecution";
 import { DonateTroopsExecution } from "./DonateTroopExecution";
 import { EmbargoAllExecution } from "./EmbargoAllExecution";
@@ -33,6 +35,7 @@ import { TargetPlayerExecution } from "./TargetPlayerExecution";
 import { TransportShipExecution } from "./TransportShipExecution";
 import { TribeSpawner } from "./TribeSpawner";
 import { UpgradeStructureExecution } from "./UpgradeStructureExecution";
+import { VassalageIntentExecution } from "./VassalageIntentExecution";
 import { PlayerSpawner } from "./utils/PlayerSpawner";
 
 export class Executor {
@@ -98,6 +101,16 @@ export class Executor {
         return new AllianceRejectExecution(intent.requestor, player);
       case "breakAlliance":
         return new BreakAllianceExecution(player, intent.recipient);
+      case "vassalageRequest":
+        return new VassalageIntentExecution(
+          player,
+          intent.recipient,
+          intent.asEmpire ? "makeVassal" : "becomeVassal",
+        );
+      case "vassalageReject":
+        return new VassalageIntentExecution(player, intent.requestor, "reject");
+      case "breakVassalage":
+        return new VassalageIntentExecution(player, intent.recipient, "break");
       case "targetPlayer":
         return new TargetPlayerExecution(player, intent.target);
       case "emoji":
@@ -108,10 +121,18 @@ export class Executor {
           intent.recipient,
           intent.troops,
         );
+      case "commit_troops":
+        return new CommitTroopsExecution(
+          player,
+          intent.recipient,
+          intent.troops,
+        );
       case "donate_gold":
         return new DonateGoldExecution(player, intent.recipient, intent.gold);
       case "donate_tiles":
         return new DonateTilesExecution(player, intent.recipient, intent.tiles);
+      case "cancel_tile_donation":
+        return new CancelTileDonationExecution(player, intent.donationID);
       case "embargo":
         return new EmbargoExecution(player, intent.targetID, intent.action);
       case "embargo_all":

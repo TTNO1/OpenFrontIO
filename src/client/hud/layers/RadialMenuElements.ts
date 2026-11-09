@@ -32,13 +32,16 @@ import {
   SendUpgradeStructureIntentEvent,
 } from "../../Transport";
 const allianceIcon = assetUrl("images/AllianceIconWhite.svg");
+const becomeVassalIcon = assetUrl("images/BecomeVassalIconWhite.svg");
 const boatIcon = assetUrl("images/BoatIconWhite.svg");
 const buildIcon = assetUrl("images/BuildIconWhite.svg");
 const chatIcon = assetUrl("images/ChatIconWhite.svg");
+const commitTroopIcon = assetUrl("images/CommitTroopsIconWhite.svg");
 const donateGoldIcon = assetUrl("images/DonateGoldIconWhite.svg");
 const donateTroopIcon = assetUrl("images/DonateTroopIconWhite.svg");
 const emojiIcon = assetUrl("images/EmojiIconWhite.svg");
 const infoIcon = assetUrl("images/InfoIcon.svg");
+const makeVassalIcon = assetUrl("images/MakeVassalIconWhite.svg");
 const swordIcon = assetUrl("images/SwordIconWhite.svg");
 const targetIcon = assetUrl("images/TargetIconWhite.svg");
 const traitorIcon = assetUrl("images/TraitorIconWhite.svg");
@@ -261,6 +264,40 @@ const allyExtendElement: MenuElement = {
     return Math.max(0, Math.min(1, remaining / extensionWindow));
   },
   renderType: "allyExtend",
+};
+
+const requestMakeVassalElement: MenuElement = {
+  id: "request_empire",
+  name: "empire",
+  disabled: (params: MenuElementParams) =>
+    !params.playerActions?.interaction?.canSendVassalageRequest,
+  displayed: (params: MenuElementParams) =>
+    !!params.playerActions?.interaction?.canSendVassalageRequest,
+  color: "#ffd900",
+  icon: makeVassalIcon,
+  //text: translateText("player_panel.request_empire"),
+  action: (params: MenuElementParams) => {
+    if (!params.selected) return;
+    params.playerActionHandler.handleVassalageRequest(params.selected, true);
+    params.closeMenu();
+  },
+};
+
+const requestBecomeVassalElement: MenuElement = {
+  id: "request_vassalage",
+  name: "vassal",
+  disabled: (params: MenuElementParams) =>
+    !params.playerActions?.interaction?.canSendSelfVassalageRequest,
+  displayed: (params: MenuElementParams) =>
+    !!params.playerActions?.interaction?.canSendSelfVassalageRequest,
+  color: "#df0cb1",
+  icon: becomeVassalIcon,
+  //text: translateText("player_panel.request_vassalage"),
+  action: (params: MenuElementParams) => {
+    if (!params.selected) return;
+    params.playerActionHandler.handleVassalageRequest(params.selected, false);
+    params.closeMenu();
+  },
 };
 
 const allyBreakElement: MenuElement = {
@@ -627,6 +664,25 @@ const donateGoldRadialElement: MenuElement = {
   },
 };
 
+const commitTroopsRadialElement: MenuElement = {
+  id: "commit_troops",
+  name: "radial_garrison",
+  disabled: (params: MenuElementParams) =>
+    params.game.inSpawnPhase() ||
+    !params.playerActions?.interaction?.canCommitTroops,
+  displayed: (params: MenuElementParams) =>
+    !!params.playerActions?.interaction?.canCommitTroops,
+  icon: commitTroopIcon,
+  color: "#1BB1E3",
+  //text: translateText("player_panel.commit_troops"),
+  action: (params: MenuElementParams) => {
+    if (!params.selected) return;
+    const ratio = params.uiState?.attackRatio ?? 1;
+    const troops = Math.floor(ratio * params.myPlayer.troops());
+    params.playerActionHandler.handleCommitTroops(params.selected, troops);
+  },
+};
+
 const deleteUnitElement: MenuElement = {
   id: Slot.Delete,
   name: "delete",
@@ -815,6 +871,9 @@ export const rootMenuElement: MenuElement = {
         : [
             isAllied && !isDisconnected ? allyBreakElement : boatMenuElement,
             inExtensionWindow ? allyExtendElement : allyRequestElement,
+            requestMakeVassalElement,
+            requestBecomeVassalElement,
+            commitTroopsRadialElement,
             showDonateInsteadOfAttack
               ? donateGoldRadialElement
               : attackMenuElement,

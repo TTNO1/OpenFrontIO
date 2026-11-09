@@ -33,7 +33,7 @@ import { UserSettings } from "../UserSettings";
 import { type CosmeticOwner, visibleCosmetics } from "./CosmeticVisibility";
 import { playerStateFromUpdate, playerStaticFromUpdate } from "./EntityState";
 import { GameView } from "./GameView";
-import { resolvePlayerColors } from "./PlayerColors";
+import { gammaMix, resolvePlayerColors } from "./PlayerColors";
 import { applyStateUpdate } from "./PlayerStateUpdate";
 import { UnitView } from "./UnitView";
 
@@ -228,14 +228,28 @@ export class PlayerView implements PlayerLike {
   }
 
   territoryColor(tile?: TileRef): Colord {
-    if (tile === undefined || this.decoder === undefined) {
-      return this._territoryColor;
+    if (tile !== undefined && this.decoder !== undefined) {
+      const isPrimary = this.decoder.isPrimary(
+        this.game.x(tile),
+        this.game.y(tile),
+      );
+      if (!isPrimary) return this._borderColor;
     }
-    const isPrimary = this.decoder.isPrimary(
-      this.game.x(tile),
-      this.game.y(tile),
+    return this.vassalTerritoryColor();
+  }
+
+  originalTerritoryColor(): Colord {
+    return this._territoryColor;
+  }
+
+  private vassalTerritoryColor(): Colord {
+    const empire = this.empire();
+    if (empire === null) return this._territoryColor;
+    return gammaMix(
+      empire.originalTerritoryColor(),
+      this._territoryColor,
+      0.8,
     );
-    return isPrimary ? this._territoryColor : this._borderColor;
   }
 
   structureColors(): { light: Colord; dark: Colord } {
@@ -350,6 +364,10 @@ export class PlayerView implements PlayerLike {
     return this.state.outgoingAttacks;
   }
 
+  outgoingTileDonations(): { id: string; recipientID: number; tiles: number }[] {
+    return this.state.outgoingTileDonations ?? [];
+  }
+
   incomingAttacks(): AttackUpdate[] {
     return this.state.incomingAttacks;
   }
@@ -445,6 +463,34 @@ export class PlayerView implements PlayerLike {
       (a) => this.game.playerBySmallID(a) as PlayerView,
     );
   }
+
+  /** The other side of each vassalage. `isOtherVassal` means they are my vassal. */
+  vassalages(): { other: PlayerView; isOtherVassal: boolean }[] {
+    const rows = this.state.vassalages ?? [];
+    const out: { other: PlayerView; isOtherVassal: boolean }[] = [];
+    for (const row of rows) {
+      let other: PlayerView;
+      try {
+        other = this.game.player(row.other);
+      } catch {
+        continue;
+      }
+      if (other.isAlive()) {
+        out.push({ other, isOtherVassal: row.isOtherVassal });
+      }
+    }
+    return out;
+  }
+
+  empire(): PlayerView | null {
+    return this.vassalages().find((row) => !row.isOtherVassal)?.other ?? null;
+  }
+
+  vassals(): PlayerView[] {
+    return this.vassalages()
+      .filter((row) => row.isOtherVassal)
+      .map((row) => row.other);
+  }
   targets(): PlayerView[] {
     return this.state.targets.map(
       (id) => this.game.playerBySmallID(id) as PlayerView,
@@ -480,6 +526,10 @@ export class PlayerView implements PlayerLike {
     return this.state.troops;
   }
 
+  absorption(): number {
+    return this.state.absorption ?? 0;
+  }
+
   totalUnitLevels(type: UnitType): number {
     return this.units(type)
       .filter((unit) => !unit.isUnderConstruction())
@@ -502,13 +552,25 @@ export class PlayerView implements PlayerLike {
   isOnSameTeam(other: PlayerView): boolean {
     return this.static.team !== null && this.static.team === other.static.team;
   }
+  
+  hasVassalageWith(other: PlayerView): boolean {
+    return this.state.vassalages?.some(v => v.other === other.id()) ?? false;
+  }
 
   isFriendly(other: PlayerView): boolean {
-    return this.isAlliedWith(other) || this.isOnSameTeam(other);
+    return this.isAlliedWith(other) || this.isOnSameTeam(other) || this.hasVassalageWith(other);
   }
 
   isRequestingAllianceWith(other: PlayerView) {
     return this.state.outgoingAllianceRequests.some((id) => other.id() === id);
+  }
+
+  isRequestingVassalageWith(other: PlayerView) {
+    const id = other.id();
+    return (
+      (this.state.outgoingVassalageRequests?.includes(id) ?? false) ||
+      (this.state.outgoingSelfVassalageRequests?.includes(id) ?? false)
+    );
   }
 
   alliances(): AllianceView[] {

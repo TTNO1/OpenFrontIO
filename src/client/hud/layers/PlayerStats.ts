@@ -27,7 +27,7 @@ export class PlayerStats extends StatsTable {
         values: columnValues(player, game, columns),
         emphasized:
           myPlayer !== null &&
-          (player === myPlayer || player.isOnSameTeam(myPlayer)),
+          (player === myPlayer || player.isOnSameTeam(myPlayer) || player.hasVassalageWith(myPlayer)),
         pinned: player === myPlayer,
         onClick: () => {
           if (this.eventBus !== null) {

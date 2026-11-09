@@ -98,6 +98,7 @@ import {
   VassalageRequest,
 } from "./Game";
 import { PlayerImpl } from "./PlayerImpl";
+import { RelationEvent } from "./RelationMemory";
 import { RailNetwork } from "./RailNetwork";
 import {
   createRailNetwork,
@@ -149,7 +150,7 @@ export class GameImpl implements Game {
 
   allianceRequests: AllianceRequestImpl[] = [];
   vassalageRequests: VassalageRequestImpl[] = [];
-  vassalages_: VassalageImpl[] = [];
+  _vassalages: VassalageImpl[] = [];
 
   private nextPlayerID = 1;
   private _nextUnitID = 1;
@@ -449,6 +450,10 @@ export class GameImpl implements Game {
       console.log("cannot request alliance, already allied");
       return null;
     }
+    if (requestor.empire() !== null || recipient.empire() !== null) {
+      console.log("cannot request alliance, a vassal cannot ally");
+      return null;
+    }
     if (
       recipient
         .incomingAllianceRequests()
@@ -502,6 +507,11 @@ export class GameImpl implements Game {
       request,
     );
 
+    // Both sides' opinion of the other. Every accept lands here, including a
+    // nation answering a one-sided request.
+    requestor.applyRelation(recipient, RelationEvent.AcceptAlliance);
+    recipient.applyRelation(requestor, RelationEvent.AcceptAlliance);
+
     this.addUpdate({
       type: GameUpdateType.AllianceRequestReply,
       request: request.toUpdate(),
@@ -552,6 +562,15 @@ export class GameImpl implements Game {
     const vr = new VassalageRequestImpl(requestor, recipient, vassal, empire, this._ticks, this);
     this.vassalageRequests.push(vr);
     this.addUpdate(vr.toUpdate());
+    this.displayMessage(
+      "events_display.vassalage_request_sent",
+      MessageType.ALLIANCE_REQUEST,
+      requestor.id(),
+      undefined,
+      { name: recipient.displayName() },
+      undefined,
+      recipient.id(),
+    );
     return vr;
   }
 
@@ -565,13 +584,16 @@ export class GameImpl implements Game {
     const vassal = request.vassal();
     const empire = request.empire();
 
-    if (requestor.hasVassalageWith(recipient)) {
+    if (vassal.empire() !== null) {
       throw new Error(
-        `cannot accept vassalage request, already vassaled with ${recipient.name()}`,
+        `cannot accept vassalage request, ${vassal.name()} is already vassal of ${vassal.empire()?.name()}`,
       );
     }
-    
-    //TODO left off: make sure we can accept this (not vasseling empire of empire, etc.)
+    if (empire.empire() !== null) {
+      throw new Error(
+        `cannot accept vassalage request, ${empire.name()} is a vassal of ${empire.empire()?.name()}`,
+      );
+    }
 
     // Remove alliance if there was one
     const alliance = requestor.allianceWith(recipient);
@@ -589,16 +611,34 @@ export class GameImpl implements Game {
       this._ticks,
       this.nextAllianceID++,
     );
-    this.vassalages_.push(vassalage);
+    this._vassalages.push(vassalage);
     (request.requestor() as PlayerImpl).pastOutgoingVassalageRequests.push(
       request,
     );
+    
+    // A vassal cannot keep vassals
+    this.transferVassals(vassal, empire);
+    
+    this.allianceRequests.filter(ar => {return (ar.requestor() === vassal || ar.recipient() === vassal) && ar.status() === "pending";}).forEach(pending => {pending.reject();});
+    this.vassalageRequests.filter(vr => {return (vr.requestor() === vassal || vr.recipient() === vassal) && vr.status() === "pending";}).forEach(pending => {pending.reject();});
+    
+    // The garrison score is live from the first moment
+    (empire as PlayerImpl).refreshCommittedRelation(vassal);
 
     this.addUpdate({
       type: GameUpdateType.VassalageRequestReply,
       request: request.toUpdate(),
       accepted: true,
     });
+    this.displayMessage(
+      "events_display.vassalage_request_accepted",
+      MessageType.ALLIANCE_ACCEPTED,
+      requestor.id(),
+      undefined,
+      { name: recipient.displayName() },
+      undefined,
+      recipient.id(),
+    );
   }
 
   rejectVassalageRequest(request: VassalageRequestImpl) {
@@ -613,9 +653,41 @@ export class GameImpl implements Game {
       request: request.toUpdate(),
       accepted: false,
     });
+    this.displayMessage(
+      "events_display.vassalage_request_rejected",
+      MessageType.ALLIANCE_REJECTED,
+      request.requestor().id(),
+      undefined,
+      { name: request.recipient().displayName() },
+      undefined,
+      request.recipient().id(),
+    );
+  }
+
+  /** Move every vassal under `from` to `to`, including vassals of those vassals. */
+  private transferVassals(from: Player, to: Player): void {
+    for (const sub of from.vassals()) {
+      this.transferVassals(sub, to);
+      const link = from.vassalageWith(sub);
+      if (link === null) continue;
+      (from as PlayerImpl).releaseCommitted(sub);
+      this._vassalages = this._vassalages.filter((v) => v !== link);
+      this._vassalages.push(
+        new VassalageImpl(
+          this,
+          to,
+          sub,
+          sub,
+          to,
+          this._ticks,
+          this.nextAllianceID++,
+        ),
+      );
+      (to as PlayerImpl).refreshCommittedRelation(sub);
+    }
   }
   
-    public breakVassalage(breaker: Player, vassalage: Vassalage) {
+  public breakVassalage(breaker: Player, vassalage: Vassalage) {
     const other = vassalage.other(breaker);
 
     if (!breaker.hasVassalageWith(other)) {
@@ -623,11 +695,21 @@ export class GameImpl implements Game {
         `${breaker} not vassaled with ${other}, cannot break vassalage`,
       );
     }
-    if (!other.isTraitor() && !other.isDisconnected()) {
-      breaker.markTraitor();
+    // Only the vassal can walk away. The empire cannot.
+    if (vassalage.empire() === breaker) {
+      return;
     }
+    if (!other.isTraitor() && !other.isDisconnected()) {
+      breaker.markTraitor(2);
+      other.applyRelation(breaker, RelationEvent.Betray);
+      other.applyRelation(breaker, RelationEvent.AllianceEnds);
+    } else {
+      other.applyRelation(breaker, RelationEvent.AllianceEnds);
+    }
+    const empire = vassalage.empire();
+    empire.releaseCommitted(vassalage.vassal());
 
-    this.vassalages_ = this.vassalages_.filter((v) => v !== vassalage);
+    this._vassalages = this._vassalages.filter((v) => v !== vassalage);
 
     this.addUpdate({
       type: GameUpdateType.BrokeVassalage,
@@ -638,7 +720,13 @@ export class GameImpl implements Game {
   }
   
   public removeVassalagesByPlayerSilently(player: Player): void {
-    this.vassalages_ = this.vassalages_.filter(
+    const removed = this._vassalages.filter(
+      (v) => v.requestor() === player || v.recipient() === player,
+    );
+    for (const vassalage of removed) {
+      vassalage.empire().releaseCommitted(vassalage.vassal());
+    }
+    this._vassalages = this._vassalages.filter(
       (v) => v.requestor() !== player && v.recipient() !== player,
     );
   }
@@ -1212,6 +1300,9 @@ export class GameImpl implements Game {
     this.stats().allianceEnded(breaker, duration, null);
 
     this.detachAlliance(alliance);
+    // Both opinions lose the +50. A later accept writes it again.
+    breaker.applyRelation(other, RelationEvent.AllianceEnds);
+    other.applyRelation(breaker, RelationEvent.AllianceEnds);
 
     this.addUpdate({
       type: GameUpdateType.BrokeAlliance,
@@ -1237,6 +1328,12 @@ export class GameImpl implements Game {
     this.stats().allianceEnded(expiring.requestor(), duration, "expired");
     this.stats().allianceEnded(expiring.recipient(), duration, "expired");
     this.detachAlliance(expiring);
+    expiring
+      .requestor()
+      .applyRelation(expiring.recipient(), RelationEvent.AllianceEnds);
+    expiring
+      .recipient()
+      .applyRelation(expiring.requestor(), RelationEvent.AllianceEnds);
     this.addUpdate({
       type: GameUpdateType.AllianceExpired,
       player1ID: alliance.requestor().smallID(),
@@ -1259,6 +1356,12 @@ export class GameImpl implements Game {
       this.stats().allianceEnded(alliance.requestor(), duration, null);
       this.stats().allianceEnded(alliance.recipient(), duration, null);
       this.detachAlliance(alliance);
+      alliance
+        .requestor()
+        .applyRelation(alliance.recipient(), RelationEvent.AllianceEnds);
+      alliance
+        .recipient()
+        .applyRelation(alliance.requestor(), RelationEvent.AllianceEnds);
     }
   }
 

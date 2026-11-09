@@ -10,6 +10,7 @@ import {
   MirvExecutionSnapshot,
 } from "@openfront/engine/execution/MIRVExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { setup } from "../../util/Setup";
 import { executeTicks } from "../../util/utils";
 
@@ -227,8 +228,8 @@ describe("MIRVExecution", () => {
     expect(game.owner(targetTile).isPlayer()).toBe(false);
     const allianceRequest = player.createAllianceRequest(otherPlayer);
     allianceRequest!.accept();
-    const playerRelationSpy = vi.spyOn(player, "updateRelation");
-    const otherPlayerRelationSpy = vi.spyOn(otherPlayer, "updateRelation");
+    const playerRelationSpy = vi.spyOn(player, "applyRelation");
+    const otherPlayerRelationSpy = vi.spyOn(otherPlayer, "applyRelation");
     const bombLaunchSpy = vi.spyOn(game.stats(), "bombLaunch");
     vi.spyOn(player, "canBuild").mockReturnValue(game.ref(10, 10));
     const displaySpy = vi.spyOn(game, "displayIncomingUnit");
@@ -249,8 +250,14 @@ describe("MIRVExecution", () => {
     );
     expect(player.isAlliedWith(otherPlayer)).toBe(false);
     expect(player.isTraitor()).toBe(true);
-    expect(playerRelationSpy).toHaveBeenCalledWith(otherPlayer, -100);
-    expect(otherPlayerRelationSpy).toHaveBeenCalledWith(player, -100);
+    expect(playerRelationSpy).toHaveBeenCalledWith(
+      otherPlayer,
+      RelationEvent.SendMirv,
+    );
+    expect(otherPlayerRelationSpy).toHaveBeenCalledWith(
+      player,
+      RelationEvent.ReceiveMirv,
+    );
     expect(displaySpy).toHaveBeenCalledTimes(1);
     expect(displaySpy.mock.calls[0][3]).toBe(otherPlayer.id());
   });

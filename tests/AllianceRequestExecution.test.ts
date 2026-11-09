@@ -38,6 +38,46 @@ describe("AllianceRequestExecution", () => {
 
     expect(player1.isAlliedWith(player2)).toBeTruthy();
     expect(player2.isAlliedWith(player1)).toBeTruthy();
+    expect(player1.relationValue(player2)).toBe(50);
+    expect(player2.relationValue(player1)).toBe(50);
+  });
+
+  test("Accepting a one-sided request sets both opinions", () => {
+    const request = player1.createAllianceRequest(player2);
+    expect(request).not.toBeNull();
+    request!.accept();
+
+    expect(player1.isAlliedWith(player2)).toBeTruthy();
+    expect(player1.relationValue(player2)).toBe(50);
+    expect(player2.relationValue(player1)).toBe(50);
+    expect(player2.playerProfile().relationValues?.[player1.smallID()]).toBe(
+      50,
+    );
+  });
+
+  test("Ending an alliance cancels the bonus and reforming restores it", () => {
+    player1.createAllianceRequest(player2)!.accept();
+    expect(player2.relationValue(player1)).toBe(50);
+
+    player1.breakAlliance(player1.allianceWith(player2)!);
+    expect(player1.relationValue(player2)).toBe(0);
+    expect(player2.relationValue(player1)).toBe(0);
+
+    player1.createAllianceRequest(player2)!.accept();
+    expect(player1.relationValue(player2)).toBe(50);
+    expect(player2.relationValue(player1)).toBe(50);
+  });
+
+  test("Ending a vassalage clears the garrison score", () => {
+    const empire = player1;
+    const vassal = player2;
+    empire.createVassalageRequest(vassal)!.accept();
+    empire.addTroops(100_000);
+    expect(empire.commitTroopsToVassal(vassal, 50_000)).toBeGreaterThan(0);
+    expect(vassal.relationValue(empire)).not.toBe(0);
+
+    vassal.breakVassalage(vassal.vassalageWith(empire)!);
+    expect(vassal.relationValue(empire)).toBe(0);
   });
 
   test("Can reject alliance request", () => {

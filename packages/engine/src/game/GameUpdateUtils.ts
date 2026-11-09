@@ -74,6 +74,11 @@ export function diffPlayerUpdate(
     emojiArrayEqual(prev.outgoingEmojis, next.outgoingEmojis) &&
     attackArrayMembershipEqual(prev.outgoingAttacks, next.outgoingAttacks) &&
     attackArrayMembershipEqual(prev.incomingAttacks, next.incomingAttacks) &&
+    tileDonationArrayEqual(
+      prev.outgoingTileDonations,
+      next.outgoingTileDonations,
+    ) &&
+    prev.absorption === next.absorption &&
     allianceArrayEqual(prev.alliances, next.alliances) &&
     stringArrayEqual(
       prev.outgoingVassalageRequests,
@@ -167,6 +172,14 @@ export function diffPlayerUpdate(
     attackArrayMembershipEqual(prev.incomingAttacks, next.incomingAttacks),
   );
   setIfDifferent(
+    "outgoingTileDonations",
+    tileDonationArrayEqual(
+      prev.outgoingTileDonations,
+      next.outgoingTileDonations,
+    ),
+  );
+  setIfDifferent("absorption", prev.absorption === next.absorption);
+  setIfDifferent(
     "alliances",
     allianceArrayEqual(prev.alliances, next.alliances),
   );
@@ -213,6 +226,25 @@ function stringSetEqual(a?: Set<string>, b?: Set<string>): boolean {
   if (!a || !b) return false;
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+function tileDonationArrayEqual(
+  a?: { id: string; recipientID: number; tiles: number }[],
+  b?: { id: string; recipientID: number; tiles: number }[],
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (
+      a[i].id !== b[i].id ||
+      a[i].recipientID !== b[i].recipientID ||
+      a[i].tiles !== b[i].tiles
+    ) {
+      return false;
+    }
+  }
   return true;
 }
 

@@ -24,6 +24,7 @@ import {
 import { assertNever, boundingBoxTiles } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Game, Player, Unit } from "../../game/Game";
+import { RELATION_READ } from "../../game/RelationMemory";
 import type {
   SnapshotReader,
   SnapshotWriter,
@@ -440,7 +441,7 @@ export class NationNukeBehavior {
     // Assist allies, check their targets (this is basically the same as in assistAllies, but without sending emojis)
     for (const ally of this.player.allies()) {
       if (ally.targets().length === 0) continue;
-      if (this.player.relation(ally) < Relation.Friendly) continue;
+      if (this.player.relationValue(ally) < RELATION_READ.assistAllyNukes) continue;
 
       for (const target of ally.targets()) {
         if (target === this.player) continue;

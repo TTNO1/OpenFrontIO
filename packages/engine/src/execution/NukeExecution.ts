@@ -20,6 +20,7 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, isUnit, Player, Unit } from "../game/Game";
+import { RelationEvent } from "../game/RelationMemory";
 import { UniversalPathFinding } from "../pathfinding/PathFinder";
 import { ParabolaUniversalPathFinder } from "../pathfinding/PathFinder.Parabola";
 import { PathStatus } from "../pathfinding/types";
@@ -64,6 +65,12 @@ export class NukeExecution implements Execution {
       increment: this.speed,
       directionUp: this.rocketDirectionUp,
     });
+  }
+
+  private targetsNation(): boolean {
+    if (this.player.empire() === null) return false;
+    const owner = this.mg.owner(this.dst);
+    return owner.isPlayer() && !this.player.canAttackPlayer(owner);
   }
 
   public target(): Player | TerraNullius {
@@ -194,12 +201,16 @@ export class NukeExecution implements Execution {
         this.player.breakAlliance(alliance);
       }
       if (attackedPlayer !== this.player) {
-        attackedPlayer.updateRelation(this.player, -100);
+        attackedPlayer.applyRelation(this.player, RelationEvent.Nuke);
       }
     }
   }
 
   tick(ticks: number): void {
+    if (this.nuke === null && this.targetsNation()) {
+      this.active = false;
+      return;
+    }
     if (this.nuke === null) {
       const spawn = this.player.canBuild(this.nukeType, this.dst);
       if (spawn === false) {

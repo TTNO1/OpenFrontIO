@@ -5,6 +5,8 @@ import {
   AllianceRequestUpdate,
   BrokeAllianceUpdate,
   GameUpdateType,
+  VassalageRequestReplyUpdate,
+  VassalageRequestUpdate,
 } from "@openfront/engine-api/game/GameUpdates";
 import { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement } from "lit";
@@ -16,6 +18,8 @@ import {
   SendAllianceExtensionIntentEvent,
   SendAllianceRejectIntentEvent,
   SendAllianceRequestIntentEvent,
+  SendVassalageRejectIntentEvent,
+  SendVassalageRequestIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
 import { getMessageTypeClasses, translateText } from "../../Utils";
@@ -36,6 +40,7 @@ interface ActionableEvent {
   allianceID?: number;
   duration?: Tick;
   requestorID: number;
+  vassalage?: boolean;
 }
 
 @customElement("actionable-events")
@@ -52,6 +57,11 @@ export class ActionableEvents extends LitElement implements Controller {
 
   private updateMap = [
     [GameUpdateType.AllianceRequest, this.onAllianceRequestEvent.bind(this)],
+    [GameUpdateType.VassalageRequest, this.onVassalageRequestEvent.bind(this)],
+    [
+      GameUpdateType.VassalageRequestReply,
+      this.onVassalageRequestReplyEvent.bind(this),
+    ],
     [
       GameUpdateType.AllianceRequestReply,
       this.onAllianceRequestReplyEvent.bind(this),
@@ -115,20 +125,31 @@ export class ActionableEvents extends LitElement implements Controller {
       }
     }
 
-    const remainingEvents = this.events.filter(
-      (event) =>
-        (event.duration === undefined ||
-          this.game.ticks() - event.createdAt < event.duration) &&
-        (event.type !== MessageType.ALLIANCE_REQUEST ||
-          // We remove Alliance Requests if the requestor is dead.
-          ((
-            this.game.playerBySmallID(event.requestorID) as PlayerView
-          ).isAlive() &&
-            // We remove Alliance Requests if the requestor is no longer requesting an alliance with us.
-            (
-              this.game.playerBySmallID(event.requestorID) as PlayerView
-            ).isRequestingAllianceWith(this.game.myPlayer() as PlayerView))),
-    );
+    const remainingEvents = this.events.filter((event) => {
+      if (
+        event.duration !== undefined &&
+        this.game.ticks() - event.createdAt >= event.duration
+      ) {
+        return false;
+      }
+      if (
+        event.type !== MessageType.ALLIANCE_REQUEST &&
+        event.vassalage !== true
+      ) {
+        return true;
+      }
+      const requestor = this.game.playerBySmallID(event.requestorID);
+      if (!requestor?.isPlayer() || !(requestor as PlayerView).isAlive()) {
+        return false;
+      }
+      const asker = requestor as PlayerView;
+      // A vassalage card is not an alliance request. Keep it while their
+      // vassalage request to us is still pending.
+      if (event.vassalage === true) {
+        return asker.isRequestingVassalageWith(myPlayer);
+      }
+      return asker.isRequestingAllianceWith(myPlayer);
+    });
 
     if (this.events.length !== remainingEvents.length) {
       this.events = remainingEvents;
@@ -259,6 +280,69 @@ export class ActionableEvents extends LitElement implements Controller {
       focusID: update.requestorID,
       requestorID: update.requestorID,
     });
+  }
+
+  private onVassalageRequestEvent(update: VassalageRequestUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.recipientID !== myPlayer.smallID()) return;
+    const requestor = this.game.playerBySmallID(
+      update.requestorID,
+    ) as PlayerView;
+    const iAmTheVassal = update.vassalID === myPlayer.smallID();
+    this.addEvent({
+      description: translateText(
+        iAmTheVassal
+          ? "events_display.request_as_empire"
+          : "events_display.request_to_be_vassal",
+        { name: requestor.displayName() },
+      ),
+      buttons: [
+        {
+          text: translateText("events_display.focus"),
+          className: "btn-gray",
+          action: () => this.eventBus.emit(new GoToPlayerEvent(requestor)),
+          preventClose: true,
+        },
+        {
+          text: translateText("events_display.accept_alliance"),
+          className: "btn",
+          action: () => {
+            this.eventBus.emit(
+              new SendVassalageRequestIntentEvent(requestor, !iAmTheVassal),
+            );
+          },
+        },
+        {
+          text: translateText("events_display.reject_alliance"),
+          className: "btn-info",
+          action: () => {
+            this.eventBus.emit(new SendVassalageRejectIntentEvent(requestor));
+          },
+        },
+      ],
+      type: MessageType.ALLIANCE_REQUEST,
+      createdAt: this.game.ticks(),
+      priority: 0,
+      duration: this.game.config().allianceRequestDuration(),
+      focusID: update.requestorID,
+      requestorID: update.requestorID,
+      vassalage: true,
+    });
+  }
+
+  private onVassalageRequestReplyEvent(update: VassalageRequestReplyUpdate) {
+    const myPlayer = this.game.myPlayer();
+    if (!myPlayer || update.request.recipientID !== myPlayer.smallID()) {
+      return;
+    }
+    const requestorID = update.request.requestorID;
+    const remaining = this.events.filter(
+      (event) => !(event.vassalage === true && event.focusID === requestorID),
+    );
+    if (remaining.length !== this.events.length) {
+      this.events = remaining;
+      this.requestUpdate();
+    }
   }
 
   private onAllianceRequestReplyEvent(update: AllianceRequestReplyUpdate) {

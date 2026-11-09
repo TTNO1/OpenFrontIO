@@ -322,9 +322,12 @@ export type ClusterState = z.infer<typeof ClusterSnapshot.schema>;
 function rel(
   player: Player,
   other: Player,
-): "self" | "team" | "ally" | "other" {
+): "self" | "team" | "ally" | "other" | "vassalage" {
   if (player === other) {
     return "self";
+  }
+  if(player.hasVassalageWith(other)) {
+    return "vassalage";
   }
   if (player.isOnSameTeam(other)) {
     return "team";

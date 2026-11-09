@@ -2,6 +2,7 @@ import { PlayerID } from "@openfront/engine-api/game/GameTypes";
 import { zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player } from "../../game/Game";
+import { RelationEvent } from "../../game/RelationMemory";
 import { execSnapshotType } from "../../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -43,8 +44,11 @@ export class BreakAllianceExecution implements Execution {
     if (alliance === null) {
       console.warn("cant break alliance, not allied");
     } else {
+      const betrayed = !this.recipient.isTraitor() && !this.recipient.isDisconnected();
       this.requestor.breakAlliance(alliance);
-      this.recipient.updateRelation(this.requestor, -100);
+      if (betrayed) {
+        this.recipient.applyRelation(this.requestor, RelationEvent.Betray);
+      }
 
       const neighbors = this.requestor
         .nearby()
@@ -53,7 +57,10 @@ export class BreakAllianceExecution implements Execution {
         );
 
       for (const neighbor of neighbors) {
-        neighbor.updateRelation(this.requestor, -40);
+        neighbor.applyRelation(
+          this.requestor,
+          RelationEvent.BreakAllianceNeighbor,
+        );
       }
     }
     this.active = false;

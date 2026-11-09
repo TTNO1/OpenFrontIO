@@ -21,10 +21,16 @@ import {
   zTile,
   zTiles,
 } from "@openfront/engine-lib/snapshot/SnapshotType";
-import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { AttackLogicInput } from "../configuration/EngineConfig";
 import { Attack, Execution, Game, Player } from "../game/Game";
+import {
+  EOE_COOLDOWN_TICKS,
+  EOE_HEAT_PER_PERCENT,
+  EOE_PERMANENT_PER_PERCENT,
+  EOE_WINDOW_TICKS,
+  RelationEvent,
+} from "../game/RelationMemory";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -52,6 +58,8 @@ export class AttackExecution implements Execution {
   // Cached smallIDs for integer owner comparisons in hot loops.
   private ownerSmallID: number;
   private targetSmallID: number;
+  // Vassal tiles count as this attack's border. Rebuilt each tick.
+  private vassalIDs = new Set<number>();
   // Reusable neighbor buffers to avoid closures/allocation in hot loops.
   private nbuf: TileRef[] = [0, 0, 0, 0];
   private nbuf2: TileRef[] = [0, 0, 0, 0];
@@ -91,6 +99,7 @@ export class AttackExecution implements Execution {
         : mg.player(this._targetID);
     this.ownerSmallID = this._owner.smallID();
     this.targetSmallID = this.target.smallID();
+    this.refreshVassalIDs();
 
     if (this._owner === this.target) {
       console.error(`Player ${this._owner} cannot attack itself`);
@@ -138,9 +147,6 @@ export class AttackExecution implements Execution {
       // combined total, turning the leftover fractions into free troops.
       this.startTroops = this._owner.removeTroops(this.startTroops);
     }
-    const lastOutgoingAttackTick = this.target.isPlayer()
-      ? this._owner.getLastOutgoingAttackTick(this.target)
-      : Number.MIN_SAFE_INTEGER;
     this.attack = this._owner.createAttack(
       this.target,
       this.startTroops,
@@ -202,89 +208,47 @@ export class AttackExecution implements Execution {
 
     if (!this.target.isPlayer()) return;
     const difficulty = this.mg.config().gameConfig().difficulty;
-    // Hitting back at whoever just attacked us doesn't anger them, except on Easy
-    if (
+    // Hitting back at whoever just attacked us doesn't anger them, except on Easy.
+    const counterattack =
       difficulty !== Difficulty.Easy &&
-      this._owner.relation(this.target) === Relation.Hostile
-    ) {
-      return;
+      this._owner.relation(this.target) === Relation.Hostile;
+    if (!counterattack) {
+      this.target.applyRelation(this._owner, RelationEvent.Attack);
     }
-    let relationChange: number;
-    switch (difficulty) {
-      case Difficulty.Easy:
-        relationChange = -60;
-        break;
-      case Difficulty.Medium:
-        relationChange = -70;
-        break;
-      case Difficulty.Hard:
-        relationChange = -80;
-        break;
-      case Difficulty.Impossible:
-        relationChange = -100;
-        break;
-      default:
-        assertNever(difficulty);
-    }
-    this.target.updateRelation(this._owner, relationChange);
 
-    let enemyOfMyEnemyRelationChange: number;
-    let minTroopsFractionForEOERelationUpdate: number;
-    let attackCooldown: number;
-    let recentAttackWindow: number;
-    const assistCooldown = 250;
-    switch (difficulty) {
-      case Difficulty.Easy:
-        enemyOfMyEnemyRelationChange = 60;
-        minTroopsFractionForEOERelationUpdate = 0.03;
-        attackCooldown = 6000;
-        recentAttackWindow = 600;
-        break;
-      case Difficulty.Medium:
-        enemyOfMyEnemyRelationChange = 50;
-        minTroopsFractionForEOERelationUpdate = 0.07;
-        attackCooldown = 1500;
-        recentAttackWindow = 400;
-        break;
-      case Difficulty.Hard:
-        enemyOfMyEnemyRelationChange = 30;
-        minTroopsFractionForEOERelationUpdate = 0.1;
-        attackCooldown = 2400;
-        recentAttackWindow = 300;
-        break;
-      case Difficulty.Impossible:
-        enemyOfMyEnemyRelationChange = 15;
-        minTroopsFractionForEOERelationUpdate = 0.17;
-        attackCooldown = 4000;
-        recentAttackWindow = 250;
-        break;
-      default:
-        assertNever(difficulty);
-    }
-    if (this.mg.ticks() - lastOutgoingAttackTick > assistCooldown) {
-      const targetTargets = this.target.getRecentAttackTargets(recentAttackWindow);
-      const ownerTargets = this._owner.getRecentAttackTargets(attackCooldown);
-      for (const player of targetTargets) {
-        if (!player.isPlayer() || ownerTargets.includes(player)) continue;
-        const playerMaxTroops = this.mg.config().maxTroops(player);
+    // A attacks B. Anyone B recently attacked (C) likes A, unless A was
+    // recently attacking C themselves. A tribe is not a shared enemy, so
+    // attacking one does not raise anyone's opinion.
+    if (this.target.type() !== PlayerType.Bot) {
+      const victims = this.target.getRecentAttackTargets(EOE_WINDOW_TICKS);
+      const recentlyStruck =
+        this._owner.getRecentAttackTargets(EOE_COOLDOWN_TICKS);
+      const sent = this.attack.troops();
+      for (const victim of victims) {
+        if (!victim.isPlayer() || victim === this._owner) continue;
+        if (recentlyStruck.includes(victim)) continue;
+        const cap = this.mg.config().maxTroops(victim);
+        if (cap <= 0) continue;
+        const percent = (sent / cap) * 100;
+        victim.applyRelation(
+          this._owner,
+          RelationEvent.AttackEnemy,
+          percent * EOE_HEAT_PER_PERCENT,
+          percent * EOE_PERMANENT_PER_PERCENT,
+        );
         if (
-          (this.startTroops ?? 0) >=
-          playerMaxTroops * minTroopsFractionForEOERelationUpdate
+          victim.type() !== PlayerType.Human &&
+          victim.canSendEmoji(this._owner) &&
+          this.random.probability(0.7)
         ) {
-          player.updateRelation(this._owner, enemyOfMyEnemyRelationChange);
-          if (
-            player.type() !== PlayerType.Human &&
-            player.canSendEmoji(this._owner)
-          ) {
-            player.sendEmoji(
-              this._owner,
-              this.random.randElement(
-                EMOJI_DEFENSE_THANKS.map(
-                  (emojiId) => flattenedEmojiTable[emojiId],
-                ),
+          victim.sendEmoji(
+            this._owner,
+            this.random.randElement(
+              EMOJI_DEFENSE_THANKS.map(
+                (emojiId) => flattenedEmojiTable[emojiId],
               ),
-            );
-          }
+            ),
+          );
         }
       }
     }
@@ -299,6 +263,12 @@ export class AttackExecution implements Execution {
     this.attack.clearBorder();
     // forEach over the dense storage — the values() generator showed up in long-game profiles
     this._owner.borderTiles().forEach((tile) => this.addNeighbors(tile));
+    // An empire fights from its vassals' borders as well as its own,
+    // except onto a nation that vassal is already allied with.
+    for (const vassal of this._owner.vassals()) {
+      if (!this.vassalIDs.has(vassal.smallID())) continue;
+      vassal.borderTiles().forEach((tile) => this.addNeighbors(tile));
+    }
   }
 
   private retreat(malusPercent = 0) {
@@ -372,8 +342,27 @@ export class AttackExecution implements Execution {
     }
 
     const borderSize = this.attack.borderSize() + this.random.nextInt(0, 5);
+    // The garrison meets the attack in full before any tile can change hands.
+    // What remains of the stack, if anything, then fights the vassal's own troops.
+    if (targetPlayer !== null && troopCount > 0) {
+      const absorbed = targetPlayer.absorbIncoming(troopCount);
+      if (absorbed > 0) {
+        troopCount -= absorbed;
+        this.attack.setTroops(troopCount);
+        if (troopCount < 1) {
+          this.attack.delete();
+          this.active = false;
+          return;
+        }
+      }
+    }
     // Each tile consumes a fraction of the tick; conquer until it is spent.
     let tickBudget = 1;
+    this.refreshVassalIDs();
+    // A refresh that conquers nothing must end the attack. Vassal-border
+    // tiles used to fail the border test, get dropped, and be queued again
+    // on the next refresh, so this loop never returned.
+    let refreshedWithoutConquer = false;
 
     while (tickBudget > 0) {
       if (troopCount < 1) {
@@ -383,11 +372,12 @@ export class AttackExecution implements Execution {
       }
 
       if (this.toConquer.size() === 0) {
-        if (this.sourceTile !== null) {
+        if (this.sourceTile !== null || refreshedWithoutConquer) {
           this.retreat();
           return;
         }
         this.refreshToConquer();
+        refreshedWithoutConquer = true;
         if (this.toConquer.size() === 0) {
           this.retreat();
           return;
@@ -400,7 +390,7 @@ export class AttackExecution implements Execution {
       let onBorder = false;
       const numNeighbors = this.map.neighbors4(tileToConquer, this.nbuf);
       for (let i = 0; i < numNeighbors; i++) {
-        if (this.map.ownerID(this.nbuf[i]) === this.ownerSmallID) {
+        if (this.ownedByAttacker(this.map.ownerID(this.nbuf[i]))) {
           onBorder = true;
           break;
         }
@@ -414,6 +404,7 @@ export class AttackExecution implements Execution {
       ) {
         continue;
       }
+      refreshedWithoutConquer = false;
       this.addNeighbors(tileToConquer);
       const { attackerTroopLoss, defenderTroopLoss, tickFraction } = this.mg
         .config()
@@ -423,7 +414,7 @@ export class AttackExecution implements Execution {
       tickBudget -= tickFraction;
       troopCount -= attackerTroopLoss;
       this.attack.setTroops(troopCount);
-      if (targetPlayer) {
+      if (targetPlayer && defenderTroopLoss > 0) {
         targetPlayer.removeTroops(defenderTroopLoss);
       }
       this._owner.conquer(tileToConquer);
@@ -464,6 +455,7 @@ export class AttackExecution implements Execution {
               numTiles: defender.numTilesOwned(),
               troops: defender.troops(),
               isTraitor: defender.isTraitor(),
+              traitorSeverity: defender.getTraitorSeverity(),
               isDisconnectedTeammate:
                 defender.isDisconnected() && this._owner.isOnSameTeam(defender),
             },
@@ -482,6 +474,19 @@ export class AttackExecution implements Execution {
     if (request !== undefined) {
       request.reject();
     }
+  }
+
+  private refreshVassalIDs(): void {
+    this.vassalIDs.clear();
+    const target = this.target.isPlayer() ? this.target : null;
+    for (const vassal of this._owner.vassals()) {
+      if (target !== null && vassal.isAlliedWith(target)) continue;
+      this.vassalIDs.add(vassal.smallID());
+    }
+  }
+
+  private ownedByAttacker(ownerID: number): boolean {
+    return ownerID === this.ownerSmallID || this.vassalIDs.has(ownerID);
   }
 
   private addNeighbors(tile: TileRef) {
@@ -505,7 +510,7 @@ export class AttackExecution implements Execution {
       let numOwnedByMe = 0;
       const numInner = this.map.neighbors4(neighbor, this.nbuf2);
       for (let j = 0; j < numInner; j++) {
-        if (this.map.ownerID(this.nbuf2[j]) === this.ownerSmallID) {
+        if (this.ownedByAttacker(this.map.ownerID(this.nbuf2[j]))) {
           numOwnedByMe++;
         }
       }

@@ -74,7 +74,7 @@ export function buildStringTex(
 }
 
 /** Columns in the per-player data texture (see NamePass.writePlayerDataRow). */
-export const PLAYER_DATA_COLS = 9;
+export const PLAYER_DATA_COLS = 10;
 
 /** Player data: PLAYER_DATA_COLS x maxPlayers, RGBA32F. Dynamic. */
 export function buildPlayerDataTex(

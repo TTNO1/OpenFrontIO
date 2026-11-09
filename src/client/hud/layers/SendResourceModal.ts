@@ -4,6 +4,7 @@ import { EventBus } from "@openfront/shared/EventBus";
 import { html, LitElement } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import {
+  SendCommitTroopsIntentEvent,
   SendDonateGoldIntentEvent,
   SendDonateTilesIntentEvent,
   SendDonateTroopsIntentEvent,
@@ -17,7 +18,7 @@ export class SendResourceModal extends LitElement {
   @property({ attribute: false }) eventBus: EventBus | null = null;
 
   @property({ type: Boolean }) open: boolean = false;
-  @property({ type: String }) mode: "troops" | "gold" | "tiles" = "troops";
+  @property({ type: String }) mode: "troops" | "gold" | "tiles" | "commit" = "troops";
 
   @property({ type: Object }) total: number | bigint = 0;
   @property({ type: Object }) uiState: UIState | null = null; // to seed initial %
@@ -33,6 +34,10 @@ export class SendResourceModal extends LitElement {
   @state() private selectedPercent: number | null = null;
 
   private PRESETS = [10, 25, 50, 75, 100] as const;
+
+  private presets(): readonly number[] {
+    return this.mode === "tiles" ? [1, 5, 10, 15, 25] : this.PRESETS;
+  }
 
   createRenderRoot() {
     return this;
@@ -96,10 +101,14 @@ export class SendResourceModal extends LitElement {
 
     if (!myPlayer || !target || amount <= 0) return;
 
-    if (this.mode === "troops") {
+    if (this.mode === "troops" || this.mode === "commit") {
       const myTroops = Number(myPlayer.troops());
       if (amount > myTroops) return;
-      this.eventBus.emit(new SendDonateTroopsIntentEvent(target, amount));
+      this.eventBus.emit(
+        this.mode === "commit"
+          ? new SendCommitTroopsIntentEvent(target, amount)
+          : new SendDonateTroopsIntentEvent(target, amount),
+      );
     } else if(this.mode === "tiles") {
       const myTiles = myPlayer.numTilesOwned();
       if (amount > myTiles) return;
@@ -140,13 +149,26 @@ export class SendResourceModal extends LitElement {
     return this.isSenderAlive() ? base : 0;
   }
 
+  private maxPercent(): number {
+    return this.mode === "tiles" ? 50 : 100;
+  }
+
   private sanitizePercent(p: number) {
-    return within(p, 0, 100);
+    return within(p, 0, this.maxPercent());
   }
 
   /** Internal capacity only for troops; gold is unlimited.*/
   private getCapacityLeft(): number | null {
     if (!this.isTargetAlive()) return 0;
+    if (this.mode === "commit") {
+      if (!this.gameView || !this.myPlayer) return null;
+      // The garrison across every vassal stops at half this empire's capacity.
+      const cap = Math.floor(
+        this.toNum(this.gameView.config().maxTroops(this.myPlayer)) / 2,
+      );
+      const used = this.target?.absorption() ?? 0;
+      return Math.max(0, cap - used);
+    }
     if (this.mode !== "troops") return null;
     if (!this.gameView || !this.target) return null;
     const current = this.toNum(this.target.troops());
@@ -193,7 +215,7 @@ export class SendResourceModal extends LitElement {
   }
 
   private getFillColor(): string {
-    if (this.mode === "troops") return "rgb(168 85 247)";
+    if (this.mode === "troops" || this.mode === "commit") return "rgb(168 85 247)";
     if (this.mode === "tiles") return "rgb(4, 147, 13)";
     return "rgb(234 179 8)";
   }
@@ -215,6 +237,8 @@ export class SendResourceModal extends LitElement {
       switch (this.mode) {
         case "troops":
           return translateText("send_troops_modal.title_with_name", { name });
+        case "commit":
+          return translateText("send_troops_modal.garrison_title", { name });
         case "gold":
           return translateText("send_gold_modal.title_with_name", { name });
         case "tiles":
@@ -227,6 +251,7 @@ export class SendResourceModal extends LitElement {
     availableTooltip: () => {
       switch (this.mode) {
         case "troops":
+        case "commit":
           return translateText("send_troops_modal.available_tooltip");
         case "gold":
           return translateText("send_gold_modal.available_tooltip");
@@ -240,6 +265,7 @@ export class SendResourceModal extends LitElement {
     ariaSlider: () => {
       switch (this.mode) {
         case "troops":
+        case "commit":
           return translateText("send_troops_modal.aria_slider");
         case "gold":
           return translateText("send_gold_modal.aria_slider");
@@ -325,7 +351,7 @@ export class SendResourceModal extends LitElement {
 
     return html`
       <div class="mb-8 grid grid-cols-5 gap-2">
-        ${this.PRESETS.map((p) => {
+        ${this.presets().map((p) => {
           const pct = this.sanitizePercent(p);
           const active = (this.selectedPercent ?? percentNow) === pct;
           const label = pct === 100 ? this.i18n.max() : `${pct}%`;
@@ -360,7 +386,10 @@ export class SendResourceModal extends LitElement {
   private renderSlider(percentNow: number) {
     const basis = this.getTotalNumber();
     const cap = this.getCapacityLeft();
-    const hardMax = cap === null ? basis : Math.min(basis, cap);
+    const percentCap =
+      this.mode === "tiles" ? Math.floor(basis * 0.5) : basis;
+    const hardMax =
+      cap === null ? percentCap : Math.min(percentCap, cap);
     const dead = !this.isSenderAlive() || !this.isTargetAlive();
 
     // Where to draw the cap marker (as % of Available)
@@ -387,7 +416,7 @@ export class SendResourceModal extends LitElement {
           <input
             type="range"
             min="0"
-            .max=${basis}
+            .max=${String(hardMax)}
             .value=${this.sendAmount}
             ?disabled=${disabled}
             @input=${(e: Event) => {
@@ -449,6 +478,11 @@ export class SendResourceModal extends LitElement {
   }
 
   private renderCapacityNote(allowed: number) {
+    if (this.mode === "commit" && this.getCapacityLeft() === 0) {
+      return html`<p class="mt-1 text-xs text-amber-300">
+        ${translateText("send_troops_modal.garrison_full_note")}
+      </p>`;
+    }
     const capped = allowed !== this.sendAmount;
     if (!capped) return html``;
     return html`<p class="mt-1 text-xs text-amber-300">

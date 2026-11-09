@@ -5,7 +5,6 @@ import {
   Nation,
   PlayerID,
   PlayerType,
-  Relation,
   TerrainType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
@@ -20,6 +19,7 @@ import {
 import { assertNever, simpleHash } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
+import { RELATION_READ, RelationEvent } from "../game/RelationMemory";
 import {
   NationSchema,
   nationData,
@@ -33,6 +33,7 @@ import type {
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
+import { NationVassalageBehavior } from "./nation/NationVassalageBehavior";
 import { NationAttackBehavior } from "./nation/NationAttackBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
 import { NationMIRVBehavior } from "./nation/NationMIRVBehavior";
@@ -52,6 +53,7 @@ export class NationExecution implements Execution {
   private mirvBehavior!: NationMIRVBehavior;
   private attackBehavior!: NationAttackBehavior;
   private allianceBehavior!: NationAllianceBehavior;
+  private vassalageBehavior!: NationVassalageBehavior;
   private warshipBehavior!: NationWarshipBehavior;
   private nukeBehavior!: NationNukeBehavior;
   private structureBehavior!: NationStructureBehavior;
@@ -259,6 +261,7 @@ export class NationExecution implements Execution {
     this.updateRelationsFromEmbargos();
     this.allianceBehavior.handleAllianceRequests();
     this.allianceBehavior.handleAllianceExtensionRequests();
+    this.vassalageBehavior.maintain();
     this.mirvBehavior.considerMIRV();
     this.structureBehavior.handleStructures();
     this.warshipBehavior.maybeSpawnWarship();
@@ -283,6 +286,12 @@ export class NationExecution implements Execution {
       this.emojiBehavior,
     );
     this.allianceBehavior = new NationAllianceBehavior(
+      this.random,
+      this.mg,
+      this.player,
+      this.emojiBehavior,
+    );
+    this.vassalageBehavior = new NationVassalageBehavior(
       this.random,
       this.mg,
       this.player,
@@ -357,18 +366,17 @@ export class NationExecution implements Execution {
     const others = this.mg.players().filter((p) => p.id() !== player.id());
 
     others.forEach((other: Player) => {
-      const embargoMalus = -20;
       if (
         other.hasManualEmbargoAgainst(player) &&
         !this.embargoMalusApplied.has(other.id())
       ) {
-        player.updateRelation(other, embargoMalus);
+        player.applyRelation(other, RelationEvent.AddEmbargo);
         this.embargoMalusApplied.add(other.id());
       } else if (
         !other.hasManualEmbargoAgainst(player) &&
         this.embargoMalusApplied.has(other.id())
       ) {
-        player.updateRelation(other, -embargoMalus);
+        player.applyRelation(other, RelationEvent.RemoveEmbargo);
         this.embargoMalusApplied.delete(other.id());
       }
     });
@@ -398,24 +406,15 @@ export class NationExecution implements Execution {
         return;
       }
 
-      /* When player is hostile starts embargo. Do not stop until neutral again */
       if (
-        player.relation(other) <= Relation.Hostile &&
+        player.relationValue(other) <= RELATION_READ.startEmbargo &&
         !player.hasEmbargoAgainst(other) &&
         !player.isOnSameTeam(other)
       ) {
         player.addEmbargo(other, false);
       } else if (
-        player.relation(other) >= Relation.Neutral &&
-        player.hasEmbargoAgainst(other) &&
-        difficulty !== Difficulty.Hard &&
-        difficulty !== Difficulty.Impossible
-      ) {
-        player.stopEmbargo(other);
-      } else if (
-        player.relation(other) >= Relation.Friendly &&
-        player.hasEmbargoAgainst(other) &&
-        difficulty !== Difficulty.Impossible
+        player.relationValue(other) >= RELATION_READ.stopEmbargo &&
+        player.hasEmbargoAgainst(other)
       ) {
         player.stopEmbargo(other);
       }
@@ -516,6 +515,12 @@ export class NationExecution implements Execution {
     nuke.restoreSnapshot(b.nuke, r, random, player, attack, emoji);
     structure.restoreSnapshot(b.structure, r, random, player);
     this.emojiBehavior = emoji;
+    this.vassalageBehavior = new NationVassalageBehavior(
+      random,
+      r.game,
+      player,
+      emoji,
+    );
     this.mirvBehavior = mirv;
     this.allianceBehavior = alliance;
     this.warshipBehavior = warship;

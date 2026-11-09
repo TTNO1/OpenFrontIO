@@ -21,6 +21,7 @@ import { NationExecution } from "@openfront/engine/execution/NationExecution";
 import { SAMLauncherExecution } from "@openfront/engine/execution/SAMLauncherExecution";
 import { UpgradeStructureExecution } from "@openfront/engine/execution/UpgradeStructureExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
+import { RelationEvent } from "@openfront/engine/game/RelationMemory";
 import { setup } from "./util/Setup";
 import { TestConfig } from "./util/TestConfig";
 import { executeTicks } from "./util/utils";
@@ -224,7 +225,7 @@ describe("NationNukeBehavior - maybeDestroyEnemySam", () => {
       human.buildUnit(UnitType.SAMLauncher, samTile, {});
       // 20 tiles from the SAM, inside the atom bomb's 30-tile blast
       conquerRect(game, other, 170, 130, 185, 170);
-      nation.updateRelation(human, -100);
+      nation.applyRelation(human, RelationEvent.Attack);
       if (allied) nation.createAllianceRequest(other)?.accept();
 
       sendNukes(game, nation);

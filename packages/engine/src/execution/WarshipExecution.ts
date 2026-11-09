@@ -150,6 +150,10 @@ export class WarshipExecution implements Execution {
     this.patrol();
   }
 
+  private ports(): Unit[] {
+    return this.warship.owner().navalPorts();
+  }
+
   private healWarship(): void {
     const owner = this.warship.owner();
     // A doomed side (below the Doomsday Clock bar) cannot repair its navy, so the
@@ -163,7 +167,7 @@ export class WarshipExecution implements Execution {
     const warshipTile = this.warship.tile();
 
     let isNearPort = false;
-    for (const port of owner.units(UnitType.Port)) {
+    for (const port of owner.navalPorts()) {
       const distSquared = this.mg.euclideanDistSquared(
         warshipTile,
         port.tile(),
@@ -218,12 +222,12 @@ export class WarshipExecution implements Execution {
     if (healthBeforeHealing >= retreatThreshold) {
       return false;
     }
-    const ports = this.warship.owner().units(UnitType.Port);
+    const ports = this.warship.owner().navalPorts();
     return ports.length > 0;
   }
 
   private findNearestPort(): TileRef | undefined {
-    const ports = this.warship.owner().units(UnitType.Port);
+    const ports = this.warship.owner().navalPorts();
     if (ports.length === 0) {
       return undefined;
     }
@@ -309,7 +313,7 @@ export class WarshipExecution implements Execution {
           hasReachablePort =
             warshipComponent !== null &&
             owner
-              .units(UnitType.Port)
+              .navalPorts()
               .some(
                 (port) =>
                   port.isActive() &&
@@ -429,7 +433,7 @@ export class WarshipExecution implements Execution {
       // Check if the port has capacity available (excluding this warship from capacity check)
       const port = this.warship
         .owner()
-        .units(UnitType.Port)
+        .navalPorts()
         .find((p) => p.tile() === retreatPortTile);
       if (port && !this.isPortFullOfHealing(port, this.warship)) {
         // Port has capacity - dock here
@@ -476,7 +480,7 @@ export class WarshipExecution implements Execution {
   }
 
   private refreshRetreatPortTile(): boolean {
-    const ports = this.warship.owner().units(UnitType.Port);
+    const ports = this.warship.owner().navalPorts();
     if (ports.length === 0) {
       return false;
     }
@@ -579,14 +583,14 @@ export class WarshipExecution implements Execution {
 
     return this.warship
       .owner()
-      .units(UnitType.Port)
+      .navalPorts()
       .find((port) => port.tile() === retreatPort);
   }
 
   private nearestAvailablePortTile(
     excludeShip?: Unit,
   ): { tile: TileRef; distSquared: number } | undefined {
-    const ports = this.warship.owner().units(UnitType.Port);
+    const ports = this.warship.owner().navalPorts();
     const warshipTile = this.warship.tile();
     const warshipComponent = this.mg.getWaterComponent(warshipTile);
     if (warshipComponent === null) {

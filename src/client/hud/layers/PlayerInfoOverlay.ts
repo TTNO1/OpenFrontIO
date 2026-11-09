@@ -26,6 +26,7 @@ import { Platform } from "../../Platform";
 import { themeProvider } from "../../theme/ThemeProvider";
 import { TransformHandler } from "../../TransformHandler";
 import { UserSettings } from "../../UserSettings";
+import { SendVassalageRequestIntentEvent } from "../../Transport";
 import {
   formatKeyForDisplay,
   getTranslatedPlayerTeamLabel,
@@ -62,6 +63,9 @@ const missileSiloIcon = assetUrl("images/MissileSiloIconWhite.svg");
 const portIcon = assetUrl("images/PortIcon.svg");
 const samLauncherIcon = assetUrl("images/SamLauncherIconWhite.svg");
 const soldierIcon = assetUrl("images/SoldierIcon.svg");
+const makeVassalIcon = assetUrl("images/MakeVassalIconWhite.svg");
+const commitTroopIcon = assetUrl("images/CommitTroopsIconWhite.svg");
+const becomeVassalIcon = assetUrl("images/BecomeVassalIconWhite.svg");
 
 function euclideanDistWorld(
   coord: { x: number; y: number },
@@ -102,6 +106,8 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
   @state() private playerActions: {
     player: PlayerView;
     requestAlliance: boolean;
+    requestEmpire: boolean;
+    requestVassalage: boolean;
     breakAlliance: boolean;
     target: boolean;
     boat: boolean;
@@ -290,6 +296,8 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
         this.playerActions = {
           player,
           requestAlliance: can?.canSendAllianceRequest ?? false,
+          requestEmpire: can?.canSendVassalageRequest ?? false,
+          requestVassalage: can?.canSendSelfVassalageRequest ?? false,
           breakAlliance: can?.canBreakAlliance ?? false,
           target: can?.canTarget ?? false,
           boat: actions.buildableUnits.some(
@@ -328,8 +336,16 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
       return "";
     const relation =
       this.playerProfile?.relations[myPlayer.smallID()] ?? Relation.Neutral;
-    if (relation === Relation.Neutral) return "";
-    return html`<relation-smiley .relation=${relation}></relation-smiley>`;
+    const value = Math.round(
+      this.playerProfile?.relationValues?.[myPlayer.smallID()] ?? 0,
+    );
+    const signed = value > 0 ? `+${value}` : `${value}`;
+    const smiley =
+      relation === Relation.Neutral
+        ? ""
+        : html`<relation-smiley .relation=${relation}></relation-smiley>`;
+    return html`<span class="text-sm font-semibold text-white">${signed}</span>
+      ${smiley}`;
   }
 
   private getRelationName(relation: Relation): string {
@@ -791,6 +807,32 @@ export class PlayerInfoOverlay extends LitElement implements Controller {
           translateText("player_panel.break_alliance"),
           keybinds.breakAlliance,
           () => this.eventBus.emit(new DoBreakAllianceEvent(tile, player.id())),
+        ),
+      );
+    }
+    if (can?.requestEmpire) {
+      buttons.push(
+        this.renderShortcutButton(
+          makeVassalIcon,
+          translateText("player_panel.request_empire"),
+          undefined,
+          () =>
+            this.eventBus.emit(
+              new SendVassalageRequestIntentEvent(player, true),
+            ),
+        ),
+      );
+    }
+    if (can?.requestVassalage) {
+      buttons.push(
+        this.renderShortcutButton(
+          becomeVassalIcon,
+          translateText("player_panel.request_vassalage"),
+          undefined,
+          () =>
+            this.eventBus.emit(
+              new SendVassalageRequestIntentEvent(player, false),
+            ),
         ),
       );
     }

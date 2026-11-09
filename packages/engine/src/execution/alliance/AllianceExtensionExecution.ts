@@ -24,6 +24,10 @@ export class AllianceExtensionExecution implements Execution {
     }
     const to = mg.player(this.toID);
 
+    if (this.from.empire() !== null) {
+      return;
+    }
+
     if (!this.from.isAlive() || !to.isAlive()) {
       console.info(
         `[AllianceExtensionExecution] Player ${this.from.id()} or ${this.toID} is not alive`,

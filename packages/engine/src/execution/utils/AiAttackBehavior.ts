@@ -16,7 +16,7 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
-import { Attack, Game, Player, Unit } from "../../game/Game";
+import { Attack, Execution, Game, Player, Unit } from "../../game/Game";
 import { RELATION_READ } from "../../game/RelationMemory";
 import {
   canBuildTransportShip,
@@ -42,6 +42,8 @@ export interface BoatRoute {
 export abstract class AiAttackBehavior {
   // Only set during a nation's maybeAttack call: each boat route planned
   protected boatRoutes: Map<Player, BoatRoute | null> | null = null;
+  // Troops only leave home when the executions init at the end of the tick
+  private sentThisTick: { tick: number; troops: number } | null = null;
 
   constructor(
     protected random: PseudoRandom,
@@ -83,6 +85,8 @@ export abstract class AiAttackBehavior {
     this.player = player;
     // Only set during a maybeAttack call, so always null between ticks.
     this.boatRoutes = null;
+    // Only read in the tick it was written in.
+    this.sentThisTick = null;
     this.triggerRatio = s.triggerRatio;
     this.reserveRatio = s.reserveRatio;
     this.expandRatio = s.expandRatio;
@@ -102,7 +106,8 @@ export abstract class AiAttackBehavior {
     if (
       target.isPlayer() &&
       this.player.type() === PlayerType.Nation &&
-      (target.type() === PlayerType.Nation || target.type() === PlayerType.Human) &&
+      (target.type() === PlayerType.Nation ||
+        target.type() === PlayerType.Human) &&
       this.player.relationValue(target) >= RELATION_READ.noAttack
     ) {
       return false;
@@ -174,8 +179,32 @@ export abstract class AiAttackBehavior {
     return false;
   }
 
+  /** Our troops once everything we sent this tick has left. */
+  protected homeTroops(): number {
+    const troops = this.troopsAtInit();
+    const sent = this.sentThisTick;
+    if (sent === null || sent.tick !== this.game.ticks()) return troops;
+    return Math.max(0, troops - sent.troops);
+  }
+
+  // Our troops when the executions added this tick init
+  protected troopsAtInit(): number {
+    return this.player.troops();
+  }
+
+  protected send(exec: Execution, troops: number): void {
+    const tick = this.game.ticks();
+    const sent =
+      this.sentThisTick?.tick === tick ? this.sentThisTick.troops : 0;
+    this.sentThisTick = {
+      tick,
+      troops: sent + Math.min(troops, this.homeTroops()),
+    };
+    this.game.addExecution(exec);
+  }
+
   protected hasTriggerRatioTroops(expansion = false): boolean {
-    const ratio = this.player.troops() / this.reserveBasis(expansion);
+    const ratio = this.homeTroops() / this.reserveBasis(expansion);
     return ratio >= this.triggerRatio;
   }
 
@@ -218,8 +247,7 @@ export abstract class AiAttackBehavior {
 
   protected sendLandAttack(
     target: Player | TerraNullius,
-    sendTroops = (reserveTroops: number) =>
-      this.player.troops() - reserveTroops,
+    sendTroops = (reserveTroops: number) => this.homeTroops() - reserveTroops,
     opponent?: Player,
   ): boolean {
     const troops = this.calculateAttackTroops(target, sendTroops, opponent);
@@ -227,12 +255,13 @@ export abstract class AiAttackBehavior {
       return false;
     }
 
-    this.game.addExecution(
+    this.send(
       new AttackExecution(
         troops,
         this.player,
         target.isPlayer() ? target.id() : this.game.terraNullius().id(),
       ),
+      troops,
     );
     return true;
   }
@@ -243,14 +272,15 @@ export abstract class AiAttackBehavior {
 
     const troops = this.calculateAttackTroops(
       target,
-      () => this.player.troops() / 5,
+      () => this.homeTroops() / 5,
     );
     if (troops === null) {
       return false;
     }
 
-    this.game.addExecution(
+    this.send(
       new TransportShipExecution(this.player, route.landing, troops),
+      troops,
     );
     return true;
   }
@@ -339,12 +369,10 @@ export abstract class AiAttackBehavior {
 
   // A boat to the free land at tile
   protected sendExpansionBoat(tile: TileRef): boolean {
-    const troops = Math.min(this.player.troops() / 5, this.expansionTroopCap());
+    const troops = Math.min(this.homeTroops() / 5, this.expansionTroopCap());
     if (troops < 1) return false;
 
-    this.game.addExecution(
-      new TransportShipExecution(this.player, tile, troops),
-    );
+    this.send(new TransportShipExecution(this.player, tile, troops), troops);
     return true;
   }
 
@@ -399,6 +427,7 @@ export abstract class AiAttackBehavior {
 
   // The launch follows from the landing: our shore closest to it by water
   private routeTo(landing: TileRef, warships: Unit[]): BoatRoute | null {
+    if (this.everyLaunchBlocked(landing, warships)) return null;
     const launch = canBuildTransportShip(this.game, this.player, landing);
     if (launch === false) return null;
     return { landing, ...this.sail(launch, landing, warships) };
@@ -457,6 +486,13 @@ export abstract class AiAttackBehavior {
       picked.push(tile);
     }
     return picked.slice(1);
+  }
+
+  // Whether a warship blocks the boat to landing from every shore we could launch from, so
+  // the launch needn't be pathfound. Only for those that read nothing of a blocked route but
+  // that it's blocked: to them it's as good as no route at all.
+  protected everyLaunchBlocked(_landing: TileRef, _warships: Unit[]): boolean {
+    return false;
   }
 
   protected hostileWarships(): Unit[] {

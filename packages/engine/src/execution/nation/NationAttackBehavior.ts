@@ -439,7 +439,12 @@ export class NationAttackBehavior extends AiAttackBehavior {
           const target = find(pool);
           if (target === null) break;
           if (difficulty === Difficulty.Easy || this.canReach(target)) {
-            return target;
+            const relation = this.player.relationValue(target);
+            const attackProbability = Math.min(
+              Math.max(1 - 0.00167 * relation, 0.025),
+              1,
+            );
+            if (this.random.probability(attackProbability)) return target;
           }
           pool = pool.filter((enemy) => enemy !== target);
         }

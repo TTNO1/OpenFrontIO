@@ -435,7 +435,6 @@ export interface Player extends PlayerLike {
   troops(): number;
   /** Total of troops in outgoing attacks. */
   outgoingTroops(): number;
-  weightedEmpireTroops(weight?: number): number;
   setTroops(troops: number): void;
   addTroops(troops: number): void;
   removeTroops(troops: number): number;
@@ -491,16 +490,33 @@ export interface Player extends PlayerLike {
   setRelationHeat(other: Player, event: RelationEvent, signed: number): void;
   decayRelations(): void;
   /**
-   * @param threat 
+   * @param threat
    * @returns A ratio of the threat posed by 'threat' to this
    */
   threatScore(threat: Player): number;
+  /**
+   * @param threat
+   * @param weight
+   * @returns A ratio of the threat posed by 'threat' plus the threat posed by
+   *          the empire of 'threat' multiplied by a weight to this
+   */
+  weightedEmpireThreatScore(threat: Player, weight?: number): number;
+  recentAttackersTotalThreatScore(
+    inPastTicks: number,
+    ...exclude: Player[]
+  ): number;
+  /**
+   *
+   * @param threatScore
+   * @returns the proportion of non-friendly neighbors who have a threat score higher than 'threatScore'
+   */
+  threateningNeighbors(threatScore: number): number;
   absorption(): number;
   navalPorts(): Unit[];
   /**
-   * 
-   * @param vassal 
-   * @param troops 
+   *
+   * @param vassal
+   * @param troops
    * @returns the number of troops committed
    */
   commitTroopsToVassal(vassal: Player, troops: number): number;
@@ -540,12 +556,12 @@ export interface Player extends PlayerLike {
   canBecomeEmpireOf(other: Player): boolean;
   breakVassalage(vassalage: Vassalage): void;
   /**
-   * 
+   *
    * @param recipient the player to become my vassal
    */
   createVassalageRequest(recipient: Player): VassalageRequest | null;
   /**
-   * 
+   *
    * @param recipient the player to become my empire
    */
   createSelfVassalageRequest(recipient: Player): VassalageRequest | null;

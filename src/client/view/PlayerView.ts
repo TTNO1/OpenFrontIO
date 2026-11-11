@@ -248,7 +248,7 @@ export class PlayerView implements PlayerLike {
     return gammaMix(
       empire.originalTerritoryColor(),
       this._territoryColor,
-      0.8,
+      0.65,
     );
   }
 
@@ -364,7 +364,11 @@ export class PlayerView implements PlayerLike {
     return this.state.outgoingAttacks;
   }
 
-  outgoingTileDonations(): { id: string; recipientID: number; tiles: number }[] {
+  outgoingTileDonations(): {
+    id: string;
+    recipientID: number;
+    tiles: number;
+  }[] {
     return this.state.outgoingTileDonations ?? [];
   }
 
@@ -552,13 +556,17 @@ export class PlayerView implements PlayerLike {
   isOnSameTeam(other: PlayerView): boolean {
     return this.static.team !== null && this.static.team === other.static.team;
   }
-  
+
   hasVassalageWith(other: PlayerView): boolean {
-    return this.state.vassalages?.some(v => v.other === other.id()) ?? false;
+    return this.state.vassalages?.some((v) => v.other === other.id()) ?? false;
   }
 
   isFriendly(other: PlayerView): boolean {
-    return this.isAlliedWith(other) || this.isOnSameTeam(other) || this.hasVassalageWith(other);
+    return (
+      this.isAlliedWith(other) ||
+      this.isOnSameTeam(other) ||
+      this.hasVassalageWith(other)
+    );
   }
 
   isRequestingAllianceWith(other: PlayerView) {

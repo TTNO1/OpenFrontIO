@@ -4,12 +4,10 @@ import {
   MessageType,
   PlayerID,
   PlayerType,
-  Relation,
   TerrainType,
   TerraNullius,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import { flattenedEmojiTable } from "@openfront/engine-api/Schemas";
 import { renderTroops } from "@openfront/engine-lib/Format";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import {
@@ -37,8 +35,9 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
-import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
+import { EmojiExecution } from "./EmojiExecution";
 import { EMOJI_DEFENSE_THANKS } from "./nation/NationEmojiBehavior";
+import { FlatBinaryHeap } from "./utils/FlatBinaryHeap"; // adjust path if needed
 
 const malusForRetreat = 25;
 export class AttackExecution implements Execution {
@@ -211,21 +210,33 @@ export class AttackExecution implements Execution {
     // Hitting back at whoever just attacked us doesn't anger them, except on Easy.
     const counterattack =
       difficulty !== Difficulty.Easy &&
-      this._owner.relation(this.target) === Relation.Hostile;
+      this.mg.ticks() - this._owner.getLastIncomingAttackTick(this.target) <=
+        20 * 10;
     if (!counterattack) {
       this.target.applyRelation(this._owner, RelationEvent.Attack);
+      const targetEmpire = this.target.empire();
+      if (targetEmpire) {
+        targetEmpire.applyRelation(this._owner, RelationEvent.AttackVassal);
+      }
     }
 
     // A attacks B. Anyone B recently attacked (C) likes A, unless A was
-    // recently attacking C themselves. A tribe is not a shared enemy, so
-    // attacking one does not raise anyone's opinion.
-    if (this.target.type() !== PlayerType.Bot) {
+    // recently attacking C themselves.
+    if (
+      this.target.type() !== PlayerType.Bot &&
+      this._owner.type() !== PlayerType.Bot
+    ) {
       const victims = this.target.getRecentAttackTargets(EOE_WINDOW_TICKS);
       const recentlyStruck =
         this._owner.getRecentAttackTargets(EOE_COOLDOWN_TICKS);
       const sent = this.attack.troops();
       for (const victim of victims) {
-        if (!victim.isPlayer() || victim === this._owner) continue;
+        if (
+          !victim.isPlayer() ||
+          victim === this._owner ||
+          victim.type() === PlayerType.Bot
+        )
+          continue;
         if (recentlyStruck.includes(victim)) continue;
         const cap = this.mg.config().maxTroops(victim);
         if (cap <= 0) continue;
@@ -241,12 +252,11 @@ export class AttackExecution implements Execution {
           victim.canSendEmoji(this._owner) &&
           this.random.probability(0.7)
         ) {
-          victim.sendEmoji(
-            this._owner,
-            this.random.randElement(
-              EMOJI_DEFENSE_THANKS.map(
-                (emojiId) => flattenedEmojiTable[emojiId],
-              ),
+          this.mg.addExecution(
+            new EmojiExecution(
+              this._owner,
+              victim.id(),
+              this.random.randElement(EMOJI_DEFENSE_THANKS),
             ),
           );
         }

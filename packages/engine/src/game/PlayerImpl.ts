@@ -81,6 +81,8 @@ import {
   Vassalage,
   VassalageRequest,
 } from "./Game";
+import { GameImpl } from "./GameImpl";
+import { diffPlayerUpdate, packAttackTroopDeltas } from "./GameUpdateUtils";
 import {
   applyRelationEvent,
   committedTroopRelation,
@@ -95,8 +97,6 @@ import {
   setRelationHeat,
 } from "./RelationMemory";
 import { TileDonationImpl } from "./TileDonationImpl";
-import { GameImpl } from "./GameImpl";
-import { diffPlayerUpdate, packAttackTroopDeltas } from "./GameUpdateUtils";
 import {
   bumpTraversalGeneration,
   tileTraversalScratch,
@@ -958,7 +958,11 @@ export class PlayerImpl implements Player {
   }
 
   empire(): Player | null {
-    return this.vassalages().find((v) => v.vassal() === this)?.empire() ?? null;
+    return (
+      this.vassalages()
+        .find((v) => v.vassal() === this)
+        ?.empire() ?? null
+    );
   }
 
   vassals(): Player[] {
@@ -1003,9 +1007,9 @@ export class PlayerImpl implements Player {
     if (this.hasVassalageWith(other) || !this.isAlive() || !other.isAlive()) {
       return false;
     }
-    if (other.empire() !== null) return false;
     // A vassal cannot hold vassals of its own.
     if (this.empire() !== null) return false;
+    // Old code to check for circular empires before vassals couldn't have vassals
     let empire = this.empire();
     while (empire !== null) {
       if (empire === other) return false;
@@ -1016,13 +1020,17 @@ export class PlayerImpl implements Player {
 
   canSendVassalageRequest(other: Player): boolean {
     if (!this.canBecomeEmpireOf(other)) return false;
-    if (this.outgoingVassalageRequests().some((vr) => vr.recipient() === other)) {
+    if (
+      this.outgoingVassalageRequests().some((vr) => vr.recipient() === other)
+    ) {
       return false;
     }
-    const incoming = this.incomingVassalageRequests().find(
-      (vr) => vr.requestor() === other,
-    );
-    if (incoming && incoming.vassal() === other) return true;
+    if (
+      this.incomingVassalageRequests().some(
+        (vr) => vr.requestor() === other && vr.vassal() === other,
+      )
+    )
+      return true;
     const ticks = this.mg.ticks();
     const cooldown = this.mg.config().allianceRequestCooldown();
     return !this.pastOutgoingVassalageRequests.some(
@@ -1032,13 +1040,17 @@ export class PlayerImpl implements Player {
 
   canSendSelfVassalageRequest(other: Player): boolean {
     if (!this.canBecomeVassalOf(other)) return false;
-    if (this.outgoingVassalageRequests().some((vr) => vr.recipient() === other)) {
+    if (
+      this.outgoingVassalageRequests().some((vr) => vr.recipient() === other)
+    ) {
       return false;
     }
-    const incoming = this.incomingVassalageRequests().find(
-      (vr) => vr.requestor() === other,
-    );
-    if (incoming && incoming.empire() === other) return true;
+    if (
+      this.incomingVassalageRequests().some(
+        (vr) => vr.requestor() === other && vr.empire() === other,
+      )
+    )
+      return true;
     const ticks = this.mg.ticks();
     const cooldown = this.mg.config().allianceRequestCooldown();
     return !this.pastOutgoingVassalageRequests.some(
@@ -1215,12 +1227,12 @@ export class PlayerImpl implements Player {
     }
     this.refreshCommittedRelations();
   }
-  
+
   threatScore(other: Player): number {
     let outgoingTroopWeight: number;
     let troopCapWeight: number;
     let tileWeight: number;
-    const difficulty = this.mg.config().gameConfig().difficulty
+    const difficulty = this.mg.config().gameConfig().difficulty;
     switch (difficulty) {
       case Difficulty.Easy:
         outgoingTroopWeight = 0;
@@ -1243,24 +1255,87 @@ export class PlayerImpl implements Player {
         tileWeight = 0.15;
         break;
     }
-    
+
     const otherMaxTroops = this.mg.config().maxTroops(other);
-    let otherTroops = other.troops() + other.outgoingTroops() * outgoingTroopWeight;
-    otherTroops = otherTroops * (1 - troopCapWeight) + otherMaxTroops * troopCapWeight;
+    let otherTroops =
+      other.troops() + other.outgoingTroops() * outgoingTroopWeight;
+    otherTroops =
+      otherTroops * (1 - troopCapWeight) + otherMaxTroops * troopCapWeight;
     otherTroops += other.absorption();
-    
+
     const myMaxTroops = this.mg.config().maxTroops(this);
     let myTroops = this.troops() + this.outgoingTroops() * outgoingTroopWeight;
     myTroops = myTroops * (1 - troopCapWeight) + myMaxTroops * troopCapWeight;
     myTroops += this.absorption();
-    
+
     let troopRatio = otherTroops / Math.max(1, myTroops);
-    
+
     let tileRatio = other.numTilesOwned() / Math.max(1, this.numTilesOwned());
-    
-    if (tileRatio >= 6 && (difficulty == Difficulty.Easy || difficulty == Difficulty.Medium)) tileWeight = 1;
+
+    if (
+      tileRatio >= 6 &&
+      (difficulty === Difficulty.Easy || difficulty === Difficulty.Medium)
+    )
+      tileWeight = 1;
 
     return troopRatio * (1 - tileWeight) + tileRatio * tileWeight;
+  }
+
+  weightedEmpireThreatScore(threat: Player, weight?: number): number {
+    if (!weight) {
+      const difficulty = this.mg.config().gameConfig().difficulty;
+      switch (difficulty) {
+        case Difficulty.Easy:
+          weight = 0.1;
+          break;
+        case Difficulty.Medium:
+          weight = 0.14;
+          break;
+        case Difficulty.Hard:
+          weight = 0.17;
+          break;
+        case Difficulty.Impossible:
+          weight = 0.2;
+          break;
+      }
+    }
+    const empire = threat.empire();
+    let threatScore = this.threatScore(threat);
+    if (empire) {
+      threatScore += this.threatScore(empire) * weight;
+    }
+    return threatScore;
+  }
+
+  recentAttackersTotalThreatScore(
+    inPastTicks: number,
+    ...exclude: Player[]
+  ): number {
+    let sum = 0;
+    this.getRecentAttackers(inPastTicks)
+      .filter((a) => !exclude.includes(a))
+      .map((a) => this.threatScore(a))
+      .forEach((ts) => (sum += ts));
+    return sum;
+  }
+
+  threateningNeighbors(threatScore: number): number {
+    const neighbors = this.nearby().filter(
+      (n): n is Player => n.isPlayer() && n.type() !== PlayerType.Bot,
+    );
+    if (neighbors.length === 0) return 1;
+    let threats = 0;
+    let total = 0;
+    for (const neighbor of neighbors) {
+      if (
+        this.isFriendly(neighbor) ||
+        (neighbor.relation(this) >= 600 && this.relation(neighbor) >= 600)
+      )
+        continue;
+      if (this.threatScore(neighbor) > threatScore) threats++;
+      total++;
+    }
+    return threats / total;
   }
 
   absorption(): number {
@@ -1331,7 +1406,7 @@ export class PlayerImpl implements Player {
 
   refreshCommittedRelation(vassal: Player): void {
     let score = 0;
-    if(this.vassalageWith(vassal)?.empire() === this) {
+    if (this.vassalageWith(vassal)?.empire() === this) {
       const committed = this.committedToVassal.get(vassal) ?? 0;
       score = committedTroopRelation(
         committed,
@@ -1756,11 +1831,6 @@ export class PlayerImpl implements Player {
       total += attack.troops();
     }
     return total;
-  }
-
-  weightedEmpireTroops(weight?: number): number {
-    weight = weight ?? 0.3;
-    return Number(this._troops) + (this.empire()?.troops() ?? 0) * weight;
   }
 
   addTroops(troops: number): void {
@@ -2311,7 +2381,7 @@ export class PlayerImpl implements Player {
   }
 
   getLastIncomingAttackTick(attacker: Player): number {
-    return this.lastIncomingAttackTick.get(attacker) ?? -1;
+    return this.lastIncomingAttackTick.get(attacker) ?? -1e10;
   }
 
   lastIncomingAttackTicks(): [Player, number][] {
@@ -2325,7 +2395,7 @@ export class PlayerImpl implements Player {
   }
 
   getLastOutgoingAttackTick(target: Player): number {
-    return this.lastOutgoingAttackTick.get(target) ?? Number.MIN_SAFE_INTEGER;
+    return this.lastOutgoingAttackTick.get(target) ?? -1e10;
   }
 
   lastOutgoingAttackTicks(): [Player, number][] {
@@ -2389,8 +2459,14 @@ export class PlayerImpl implements Player {
     const myEmpire = this.empire();
     const theirEmpire = player.empire();
     if (myEmpire !== null) {
-      if (player === myEmpire || myEmpire == theirEmpire || myEmpire.isAlliedWith(player)) return false;
-      if (theirEmpire !== null && theirEmpire.isAlliedWith(myEmpire)) return false;
+      if (
+        player === myEmpire ||
+        myEmpire === theirEmpire ||
+        myEmpire.isAlliedWith(player)
+      )
+        return false;
+      if (theirEmpire !== null && theirEmpire.isAlliedWith(myEmpire))
+        return false;
     }
     if (theirEmpire !== null && this.isAlliedWith(theirEmpire)) return false;
     if (this.type() === PlayerType.Human) {
@@ -2623,14 +2699,15 @@ export const PlayerSnapshot = snapshotType({
   migrations: {
     1: (data) => ({
       ...data,
-      relations: (
-        data.relations as [unknown, number][]
-      ).map(([player, value]) => {
-        const heat = new Array<number>(RELATION_EVENT_COUNT).fill(0);
-        if (value >= 0) heat[RelationEvent.AcceptAlliance] = Math.min(50, value);
-        else heat[RelationEvent.Attack] = Math.max(-400, value);
-        return [player, heat, 0, 0];
-      }),
+      relations: (data.relations as [unknown, number][]).map(
+        ([player, value]) => {
+          const heat = new Array<number>(RELATION_EVENT_COUNT).fill(0);
+          if (value >= 0)
+            heat[RelationEvent.AcceptAlliance] = Math.min(50, value);
+          else heat[RelationEvent.Attack] = Math.max(-400, value);
+          return [player, heat, 0, 0];
+        },
+      ),
       committed: [],
       absorption: 0,
       traitorSeverity: 1,

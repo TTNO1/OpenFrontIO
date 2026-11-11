@@ -87,12 +87,10 @@ import {
   SendAttackIntentEvent,
   SendBoatAttackIntentEvent,
   SendBreakAllianceIntentEvent,
-  SendBreakVassalageIntentEvent,
   SendHashEvent,
   SendSpawnIntentEvent,
   SendTargetPlayerIntentEvent,
   SendUpgradeStructureIntentEvent,
-  SendVassalageRequestIntentEvent,
   Transport,
 } from "./Transport";
 import {
@@ -1047,12 +1045,6 @@ export class ClientGameRunner {
       DoBreakAllianceEvent,
       this.doBreakAllianceUnderCursor.bind(this),
     );
-    this.eventBus.on(SendVassalageRequestIntentEvent, (event) => {
-      this.webglBuilder?.refreshPalette(this.gameView);
-    });
-    this.eventBus.on(SendBreakVassalageIntentEvent, (event) => {
-      this.webglBuilder?.refreshPalette(this.gameView);
-    });
     this.eventBus.on(
       DoTargetPlayerEvent,
       this.doTargetPlayerUnderCursor.bind(this),
@@ -1081,6 +1073,16 @@ export class ClientGameRunner {
       });
       this.gameView.update(gu);
       this.webglBuilder?.update(this.gameView);
+      // A vassal's fill is mixed with their empire's color. That link arrives
+      // on the player update, after the request intent, so recolor only once
+      // the view already has the new vassalages.
+      if (
+        gu.updates[GameUpdateType.Player].some(
+          (pu) => pu.vassalages !== undefined,
+        )
+      ) {
+        this.webglBuilder?.refreshPalette(this.gameView);
+      }
       this.renderer.tick();
       if (gu.tickExecutionDuration !== undefined) {
         this.metrics?.recordTickExecution(gu.tickExecutionDuration);

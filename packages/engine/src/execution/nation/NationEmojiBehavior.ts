@@ -27,12 +27,12 @@ const emojiId = (e: (typeof flattenedEmojiTable)[number]) =>
   flattenedEmojiTable.indexOf(e);
 export const EMOJI_REQUEST_VASSALAGE = (["🙏", "🧎"] as const).map(emojiId);
 export const EMOJI_REQUEST_EMPIRE = (["👑", "⛓️"] as const).map(emojiId);
-export const EMOJI_EMPIRE_DEFENSE_GRATITUDE = (["🛡️", "❤️", "😇"] as const).map(
-  emojiId,
-);
-export const EMOJI_EMPIRE_INSUFFICIENT_DEFENSE = (["🥺", "💔", "🙏"] as const).map(
-  emojiId,
-);
+export const EMOJI_EMPIRE_DEFENSE_GRATITUDE = (
+  ["🛡️", "❤️", "😇", "💪"] as const
+).map(emojiId);
+export const EMOJI_EMPIRE_INSUFFICIENT_DEFENSE = (
+  ["🥺", "💔", "🙏"] as const
+).map(emojiId);
 export const EMOJI_ASSIST_ACCEPT = (["👍", "🤝", "🎯"] as const).map(emojiId);
 export const EMOJI_ASSIST_RELATION_TOO_LOW = (["🥱", "🤦‍♂️"] as const).map(
   emojiId,
@@ -384,6 +384,37 @@ export function respondToEmoji(
           : random.randElement(EMOJI_CONFUSED),
       ),
     );
+  }
+
+  if (["💰", "😈"].includes(emojiString) && sender.isEmpireOf(recipient)) {
+    if (
+      recipient.absorption() >=
+      this.game.config().maxTroops(recipient) * 2.5
+    ) {
+      const share = 10;
+      const gold =
+        (this.player.gold() * BigInt(1000)) / BigInt(Math.round(share * 1000));
+      recipient.donateGold(sender, gold);
+      game.addExecution(
+        new EmojiExecution(
+          recipient,
+          sender.id(),
+          random.randElement(
+            emojiString === "😈"
+              ? EMOJI_SCARED_OF_THREAT
+              : EMOJI_EMPIRE_DEFENSE_GRATITUDE,
+          ),
+        ),
+      );
+    } else {
+      game.addExecution(
+        new EmojiExecution(
+          recipient,
+          sender.id(),
+          random.randElement(EMOJI_EMPIRE_INSUFFICIENT_DEFENSE),
+        ),
+      );
+    }
   }
 }
 

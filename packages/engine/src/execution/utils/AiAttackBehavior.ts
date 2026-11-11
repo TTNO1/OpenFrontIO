@@ -17,7 +17,6 @@ import {
 import { assertNever } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import { Attack, Execution, Game, Player, Unit } from "../../game/Game";
-import { RELATION_READ } from "../../game/RelationMemory";
 import {
   canBuildTransportShip,
   targetTransportTile,
@@ -103,15 +102,7 @@ export abstract class AiAttackBehavior {
     ) {
       return false;
     }
-    if (
-      target.isPlayer() &&
-      this.player.type() === PlayerType.Nation &&
-      (target.type() === PlayerType.Nation ||
-        target.type() === PlayerType.Human) &&
-      this.player.relationValue(target) >= RELATION_READ.noAttack
-    ) {
-      return false;
-    }
+
     if (!force && !this.shouldAttack(target)) return false;
     // A vassalage offer this turn is instead of an attack.
     if (

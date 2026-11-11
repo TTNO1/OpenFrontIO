@@ -98,7 +98,6 @@ import {
   VassalageRequest,
 } from "./Game";
 import { PlayerImpl } from "./PlayerImpl";
-import { RelationEvent } from "./RelationMemory";
 import { RailNetwork } from "./RailNetwork";
 import {
   createRailNetwork,
@@ -106,6 +105,7 @@ import {
   RailNetworkSnapshot,
 } from "./RailNetworkImpl";
 import { Railroad } from "./Railroad";
+import { RelationEvent } from "./RelationMemory";
 import { Stats } from "./Stats";
 import { StatsImpl, StatsSnapshot } from "./StatsImpl";
 import { VassalageImpl } from "./VassalageImpl";
@@ -559,7 +559,14 @@ export class GameImpl implements Game {
       correspondingReq.accept();
       return null;
     }
-    const vr = new VassalageRequestImpl(requestor, recipient, vassal, empire, this._ticks, this);
+    const vr = new VassalageRequestImpl(
+      requestor,
+      recipient,
+      vassal,
+      empire,
+      this._ticks,
+      this,
+    );
     this.vassalageRequests.push(vr);
     this.addUpdate(vr.toUpdate());
     this.displayMessage(
@@ -584,15 +591,23 @@ export class GameImpl implements Game {
     const vassal = request.vassal();
     const empire = request.empire();
 
-    if (vassal.empire() !== null) {
-      throw new Error(
-        `cannot accept vassalage request, ${vassal.name()} is already vassal of ${vassal.empire()?.name()}`,
-      );
+    const oldVassalage = this._vassalages.find((v) => v.vassal() === vassal);
+    if (oldVassalage?.empire() === empire) {
+      console.log("cannot accept vassalage, already exists");
+      return;
     }
+
     if (empire.empire() !== null) {
       throw new Error(
         `cannot accept vassalage request, ${empire.name()} is a vassal of ${empire.empire()?.name()}`,
       );
+    }
+
+    // Break old vassalage if there was one
+    if (oldVassalage) {
+      this.breakVassalage(vassal, oldVassalage);
+      const oldEmpire = oldVassalage.empire();
+      oldEmpire.applyRelation(empire, RelationEvent.PoachVassal);
     }
 
     // Remove alliance if there was one
@@ -600,7 +615,7 @@ export class GameImpl implements Game {
     if (alliance !== null) {
       this.detachAlliance(alliance);
     }
-    
+
     // Create and register the new vassalage
     const vassalage = new VassalageImpl(
       this,
@@ -615,14 +630,38 @@ export class GameImpl implements Game {
     (request.requestor() as PlayerImpl).pastOutgoingVassalageRequests.push(
       request,
     );
-    
+
     // A vassal cannot keep vassals
     this.transferVassals(vassal, empire);
-    
-    this.allianceRequests.filter(ar => {return (ar.requestor() === vassal || ar.recipient() === vassal) && ar.status() === "pending";}).forEach(pending => {pending.reject();});
-    this.vassalageRequests.filter(vr => {return (vr.requestor() === vassal || vr.recipient() === vassal) && vr.status() === "pending";}).forEach(pending => {pending.reject();});
-    
-    // The garrison score is live from the first moment
+
+    this.allianceRequests
+      .filter((ar) => {
+        return (
+          (ar.requestor() === vassal || ar.recipient() === vassal) &&
+          ar.status() === "pending"
+        );
+      })
+      .forEach((pending) => {
+        pending.reject();
+      });
+    this.vassalageRequests
+      .filter((vr) => {
+        return (
+          (vr.requestor() === vassal || vr.recipient() === vassal) &&
+          vr.status() === "pending"
+        );
+      })
+      .forEach((pending) => {
+        pending.reject();
+      });
+
+    // Auto commit troops if we have enough
+    if (empire.troops() >= this.config().maxTroops(empire) * 0.3) {
+      empire.commitTroopsToVassal(
+        vassal,
+        Math.min(empire.troops() * 0.2, this.config().maxTroops(vassal)),
+      );
+    }
     (empire as PlayerImpl).refreshCommittedRelation(vassal);
 
     this.addUpdate({
@@ -686,7 +725,7 @@ export class GameImpl implements Game {
       (to as PlayerImpl).refreshCommittedRelation(sub);
     }
   }
-  
+
   public breakVassalage(breaker: Player, vassalage: Vassalage) {
     const other = vassalage.other(breaker);
 
@@ -697,14 +736,12 @@ export class GameImpl implements Game {
     }
     // Only the vassal can walk away. The empire cannot.
     if (vassalage.empire() === breaker) {
+      console.log("empire cannot break vassalage");
       return;
     }
     if (!other.isTraitor() && !other.isDisconnected()) {
       breaker.markTraitor(2);
       other.applyRelation(breaker, RelationEvent.Betray);
-      other.applyRelation(breaker, RelationEvent.AllianceEnds);
-    } else {
-      other.applyRelation(breaker, RelationEvent.AllianceEnds);
     }
     const empire = vassalage.empire();
     empire.releaseCommitted(vassalage.vassal());
@@ -718,7 +755,7 @@ export class GameImpl implements Game {
       vassalageID: vassalage.id(),
     });
   }
-  
+
   public removeVassalagesByPlayerSilently(player: Player): void {
     const removed = this._vassalages.filter(
       (v) => v.requestor() === player || v.recipient() === player,
@@ -730,7 +767,7 @@ export class GameImpl implements Game {
       (v) => v.requestor() !== player && v.recipient() !== player,
     );
   }
-  
+
   hasPlayer(id: PlayerID): boolean {
     return this._players.has(id);
   }

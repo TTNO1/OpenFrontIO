@@ -1,5 +1,3 @@
-import { Difficulty } from "@openfront/engine-api/game/GameTypes";
-
 /** 100ms ticks. Decay and permanent growth are both defined per game minute. */
 export const TICKS_PER_MINUTE = 600;
 
@@ -7,7 +5,7 @@ export const TICKS_PER_MINUTE = 600;
 export const PERMANENT_GROWTH_PER_MINUTE = 1.056;
 
 /** Applied after growth and after an event. The permanent score has no ceiling. */
-export const PERMANENT_FLOOR = -5;
+export const PERMANENT_FLOOR = -20;
 
 /**
  * One directed opinion is the sum of these decaying buckets plus a single
@@ -36,9 +34,11 @@ export enum RelationEvent {
   SendMirv = 19,
   /** Live function of troops the empire has committed. Decay 0. Not an event. */
   CommittedTroops = 20,
+  PoachVassal = 21,
+  AttackVassal = 22,
 }
 
-export const RELATION_EVENT_COUNT = RelationEvent.CommittedTroops + 1;
+export const RELATION_EVENT_COUNT = RelationEvent.AttackVassal + 1;
 
 export interface RelationEventSpec {
   positive: boolean;
@@ -60,10 +60,10 @@ export const RELATION_SPECS: readonly RelationEventSpec[] = [
   spec(true, 20, 150, 0, 0),
   spec(true, 7, 250, 0, 0),
   spec(false, 0, 50, 50, 0),
-  spec(false, 75, 400, 400, 30),
+  spec(false, 65, 400, 400, 30),
   spec(false, 0, 50, 50, 0),
-  spec(false, 20, 180, 180, 120),
-  spec(false, 75, 400, 400, 35),
+  spec(false, 20, 200, 200, 120),
+  spec(false, 65, 400, 400, 35),
   spec(false, 100, 600, 600, 50),
   spec(false, 45, 300, 150, 7),
   spec(false, 12, 40, 30, 0),
@@ -73,6 +73,8 @@ export const RELATION_SPECS: readonly RelationEventSpec[] = [
   spec(false, 20, 150, 35, 0),
   spec(false, 15, 100, 50, 0),
   spec(true, 0, Number.POSITIVE_INFINITY, 0, 0),
+  spec(false, 25, 400, 200, 20),
+  spec(false, 70, 400, 250, 3),
 ];
 
 function spec(
@@ -222,7 +224,7 @@ export const EOE_COOLDOWN_TICKS = 180 * 10;
 export const EOE_HEAT_PER_PERCENT = 1.75;
 export const EOE_PERMANENT_PER_PERCENT = 0.25;
 
-export const TILE_HEAT_PER_PERCENT = 8;
+export const TILE_HEAT_PER_PERCENT = 6;
 export const TILE_PERMANENT_PER_PERCENT = 2;
 export const TILE_DONATION_MAX_PERCENT = 50;
 
